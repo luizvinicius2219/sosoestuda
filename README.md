@@ -15,7 +15,7 @@ O repositório contém código e exemplos sem credenciais. Nunca adicione senha,
 1. Importe este repositório como projeto **Next.js**.
 2. Conecte um PostgreSQL privado e configure `DATABASE_URL` no painel da Vercel.
 3. Configure `BETTER_AUTH_URL` com a URL definitiva do projeto, `BETTER_AUTH_SECRET` com um segredo aleatório de pelo menos 32 caracteres e `SOFIA_EMAIL` com o e-mail autorizado.
-4. Em um computador/ambiente privado, crie `.env.local` com essas mesmas variáveis e `SOFIA_INITIAL_PASSWORD` (senha de pelo menos 12 caracteres). Não envie estes valores pelo chat compartilhado.
+4. Em um computador/ambiente privado, crie `.env.local` com essas mesmas variáveis e `SOFIA_INITIAL_PASSWORD` (senha de pelo menos 10 caracteres). Não envie estes valores pelo chat compartilhado.
 5. Execute `npm ci` e `npm run db:setup`. O script usa as migrações oficiais do Better Auth e cria a tabela de estudos; se a conta já existe, não muda a senha.
 6. Remova `SOFIA_INITIAL_PASSWORD` do ambiente após criar a conta. Essa variável não é necessária na Vercel.
 7. Faça o deploy. Sem configuração privada, a tela aparece, mas nenhum acesso aos estudos é liberado.

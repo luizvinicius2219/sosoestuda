@@ -7,7 +7,7 @@ function buildAuth() {
  if (!process.env.BETTER_AUTH_SECRET || !process.env.BETTER_AUTH_URL || !process.env.SOFIA_EMAIL) throw new Error("Acesso privado ainda não configurado.");
  return betterAuth({
   database:getPool(), secret:process.env.BETTER_AUTH_SECRET, baseURL:process.env.BETTER_AUTH_URL,
-  emailAndPassword:{enabled:true, disableSignUp:true, minPasswordLength:12},
+  emailAndPassword:{enabled:true, disableSignUp:true, minPasswordLength:10},
   rateLimit:{enabled:true, storage:"database", window:60, max:20},
   session:{expiresIn:60*60*24, updateAge:60*60},
  });
