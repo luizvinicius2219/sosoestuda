@@ -1,6 +1,6 @@
 // Execute only in a trusted private environment. Never commit .env.local.
 import {betterAuth} from "better-auth";
-import {getMigrations} from "better-auth/db";
+import {getMigrations} from "better-auth/db/migration";
 import {Pool} from "pg";
 import {randomBytes} from "node:crypto";
 import {mkdtemp,writeFile,rm} from "node:fs/promises";
