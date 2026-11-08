@@ -1,0 +1,17 @@
+{
+  "name": "SosoEstuda",
+  "short_name": "SosoEstuda",
+  "description": "Sua jornada de aprovação",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f7f3",
+  "theme_color": "#7760c5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
