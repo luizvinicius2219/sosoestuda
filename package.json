@@ -12,7 +12,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "db:setup": "node --env-file=.env.local scripts/setup-sofia.mjs"
+    "db:setup": "node --experimental-strip-types --env-file=.env.local scripts/setup-sofia.mjs",
+    "planner:import": "node --experimental-strip-types --env-file=.env.local scripts/import-planner.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

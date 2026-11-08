@@ -1,15 +1,16 @@
 import { z } from "zod";
+import { plannerSchema, plannerRefSchema, type StudyPlanner, type PlannerRef } from "./planner-schema.ts";
 
 export type Subject = { id: string; name: string; color: string; short: string; topics: string[]; source?: string };
-export type StudyTask = { id: string; subjectId: string; title: string; minutes: number; date: string; done: boolean };
+export type StudyTask = { id: string; subjectId: string; title: string; minutes: number; date: string; done: boolean; recordedMinutes?: number; plannerRef?: PlannerRef };
 export type StudyNote = { id: string; subjectId: string; title: string; content: string; updatedAt: string };
 export type StudyError = { id: string; subjectId: string; question: string; answer: string; reason: string; createdAt: string; resolved: boolean };
 export type Review = { id: string; subjectId: string; title: string; dueDate: string; interval: number };
-export type StudySession = { id: string; subjectId: string; topic: string; minutes: number; questions: number; correct: number; date: string };
+export type StudySession = { id: string; subjectId: string; topic: string; minutes: number; questions: number; correct: number; date: string; plannerRef?: PlannerRef };
 export type StudyState = {
   profile: { name: string; goal: string; dailyMinutes: number; weeklyMinutes: number; examDate: string };
   subjects: Subject[]; tasks: StudyTask[]; notes: StudyNote[]; errors: StudyError[];
-  reviews: Review[]; sessions: StudySession[]; completedTopics: string[];
+  reviews: Review[]; sessions: StudySession[]; completedTopics: string[]; planner?: StudyPlanner;
 };
 
 export const STUDY_TIMEZONE = "America/Recife";
@@ -47,12 +48,13 @@ const subjectSchema = z.object({
 
 export const studyStateSchema = z.object({
   profile: z.object({ name: z.string().trim().min(1).max(80), goal: z.string().trim().min(1).max(120), dailyMinutes: z.number().int().min(10).max(720), weeklyMinutes: z.number().int().min(10).max(5040), examDate: z.union([date, z.literal("")]) }).strict(),
+  planner: plannerSchema.optional(),
   subjects: z.array(subjectSchema).min(1).max(60),
-  tasks: z.array(z.object({ id, subjectId: id, title, minutes: z.number().int().min(5).max(480).multipleOf(5), date, done: z.boolean() }).strict()).max(1000),
+  tasks: z.array(z.object({ id, subjectId: id, title, minutes: z.number().int().min(5).max(480).multipleOf(5), date, done: z.boolean(), recordedMinutes: z.number().int().min(0).max(100000).optional(), plannerRef: plannerRefSchema.optional() }).strict()).max(1000),
   notes: z.array(z.object({ id, subjectId: id, title, content: z.string().trim().min(1).max(15000), updatedAt: timestamp }).strict()).max(500),
   errors: z.array(z.object({ id, subjectId: id, question: z.string().trim().min(1).max(3000), answer: z.string().trim().min(1).max(6000), reason: z.string().trim().min(1).max(1000), createdAt: timestamp, resolved: z.boolean() }).strict()).max(1000),
   reviews: z.array(z.object({ id, subjectId: id, title, dueDate: date, interval: z.number().int().min(1).max(365) }).strict()).max(1000),
-  sessions: z.array(z.object({ id, subjectId: id, topic: title, minutes: z.number().int().min(1).max(720), questions: z.number().int().min(0).max(1000), correct: z.number().int().min(0).max(1000), date }).strict().refine((s) => s.correct <= s.questions, "Acertos não podem ultrapassar questões.")).max(5000),
+  sessions: z.array(z.object({ id, subjectId: id, topic: title, minutes: z.number().int().min(1).max(720), questions: z.number().int().min(0).max(1000), correct: z.number().int().min(0).max(1000), date, plannerRef: plannerRefSchema.optional() }).strict().refine((s) => s.correct <= s.questions, "Acertos não podem ultrapassar questões.")).max(5000),
   completedTopics: z.array(z.string().min(1).max(110)).max(60000),
 }).strict().superRefine((state, ctx) => {
   const subjects = new Map(state.subjects.map((s) => [s.id, s]));
@@ -64,6 +66,9 @@ export const studyStateSchema = z.object({
       if (ids.has(item.id)) ctx.addIssue({ code: "custom", path: [collection, i, "id"], message: "Identificador repetido." });
       ids.add(item.id);
     });
+  }
+  for (const cycle of state.planner?.cycles || []) for (const block of cycle.blocks) {
+    if (!subjects.has(block.subjectId)) ctx.addIssue({code:"custom",path:["planner","cycles"],message:"O bloco aponta para uma disciplina inexistente."});
   }
   const topicKeys = new Set(state.subjects.flatMap((s) => s.topics.map((_, i) => topicKey(s.id, i))));
   if (new Set(state.completedTopics).size !== state.completedTopics.length || state.completedTopics.some((key) => !topicKeys.has(key))) {
@@ -146,7 +151,7 @@ export function scheduleReview(review: Review, rating: "again" | "good" | "easy"
   return { ...review, interval, dueDate: addDays(referenceDay, interval) };
 }
 
-export function completeStudy(state: StudyState, input: { subjectId: string; topic: string; minutes: number; questions: number; correct: number }): StudyState {
+export function completeStudy(state: StudyState, input: { subjectId: string; topic: string; minutes: number; questions: number; correct: number; plannerRef?: PlannerRef }): StudyState {
   const subject = state.subjects.find((s) => s.id === input.subjectId);
   if (!subject || !input.topic.trim() || input.topic.length > 200 || !Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 720 || !Number.isInteger(input.questions) || input.questions < 0 || input.questions > 1000 || !Number.isInteger(input.correct) || input.correct < 0 || input.correct > input.questions) {
     throw new Error("Confira a matéria, o tempo e a quantidade de questões e acertos.");

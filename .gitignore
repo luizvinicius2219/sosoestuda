@@ -44,3 +44,6 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# Private course documents and extracted planner data
+/.private/

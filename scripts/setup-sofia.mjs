@@ -13,3 +13,5 @@ try {
  if(existing.rows.length){console.log("A conta autorizada já existe. Nenhuma senha foi alterada.");}
  else {const auth=betterAuth(options);await auth.api.signUpEmail({body:{email:SOFIA_EMAIL,password:SOFIA_INITIAL_PASSWORD,name:"Sofia"}});console.log("Conta pessoal criada. Remova SOFIA_INITIAL_PASSWORD do ambiente.");}
 } finally {await pool.end();}
+
+if(process.env.PLANNER_IMPORT_FILE){const {importPrivatePlanner}=await import("./import-planner.mjs");await importPrivatePlanner(process.env.PLANNER_IMPORT_FILE);}

@@ -1,0 +1,5 @@
+.private
+*.pdf
+output
+outputs
+tmp
