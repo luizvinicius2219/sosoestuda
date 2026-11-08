@@ -13,7 +13,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "db:setup": "node --experimental-strip-types --env-file=.env.local scripts/setup-sofia.mjs",
-    "planner:import": "node --experimental-strip-types --env-file=.env.local scripts/import-planner.mjs"
+    "planner:import": "node --experimental-strip-types --env-file=.env.local scripts/import-planner.mjs",
+    "prebuild": "node --experimental-strip-types scripts/prepare-private-account.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
