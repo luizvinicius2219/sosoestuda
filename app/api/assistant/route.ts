@@ -1,5 +1,5 @@
-import { env } from "cloudflare:workers";
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+const env = process.env;
+import { getSofiaUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,7 @@ async function readLimitedBody(request: Request): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
+  const user = await getSofiaUser();
   if (!user) return Response.json({ error: "Entre com sua conta para usar o tutor." }, { status: 401 });
   const origin = request.headers.get("origin");
   if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {

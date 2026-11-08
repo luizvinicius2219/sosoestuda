@@ -1,7 +1,5 @@
+import { redirect } from "next/navigation";
 import StudyApp from "@/components/study-app";
-import { getChatGPTUser } from "./chatgpt-auth";
-export const dynamic = "force-dynamic";
-export default async function Home() {
-  const user = await getChatGPTUser();
-  return <StudyApp initialUser={user ? { name: user.fullName ?? user.displayName.split("@")[0], email: user.email } : null} />;
-}
+import {getSofiaUser} from "@/lib/auth";
+export const dynamic="force-dynamic";
+export default async function Home(){const user=await getSofiaUser();if(!user)redirect("/login");return <StudyApp initialUser={{name:"Sofia",email:user.email}}/>;}

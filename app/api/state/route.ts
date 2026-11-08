@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { getSofiaUser } from "@/lib/auth";
 import { getDb } from "@/db";
 import { userStudyState } from "@/db/schema";
 import { createInitialState, studyStateSchema } from "@/lib/study";
@@ -15,13 +15,13 @@ function json(body: unknown, status = 200) {
 }
 
 export async function GET() {
-  const user = await getChatGPTUser();
+  const user = await getSofiaUser();
   if (!user) return json({ error: "Entre na sua conta para sincronizar seus estudos." }, 401);
   try {
-    const row = await getDb().select().from(userStudyState).where(eq(userStudyState.ownerId, user.userId)).get();
+    const row = await getDb().select().from(userStudyState).where(eq(userStudyState.ownerId, user.userId)).then(rows => rows[0]);
     const state = row ? studyStateSchema.parse(JSON.parse(row.stateJson)) : createInitialState(false);
-    if (!row) state.profile.name = (user.fullName || user.displayName.split("@")[0]).slice(0, 80);
-    return json({ state, version: row?.version ?? 0, user: { name: user.fullName || user.displayName, email: user.email } });
+    if (!row) state.profile.name = (user.name).slice(0, 80);
+    return json({ state, version: row?.version ?? 0, user: { name: user.name, email: user.email } });
   } catch {
     return json({ error: "Não foi possível carregar seus estudos. Tente novamente." }, 503);
   }
@@ -50,7 +50,7 @@ async function boundedBody(request: Request): Promise<unknown> {
 }
 
 export async function PUT(request: Request) {
-  const user = await getChatGPTUser();
+  const user = await getSofiaUser();
   if (!user) return json({ error: "Entre na sua conta para sincronizar seus estudos." }, 401);
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) return json({ error: "Origem de solicitação inválida." }, 403);
@@ -68,8 +68,8 @@ export async function PUT(request: Request) {
     const nextVersion = input.version + 1;
     const values = { stateJson: JSON.stringify(input.state), version: nextVersion, updatedAt: new Date().toISOString() };
     const result = input.version === 0
-      ? await db.insert(userStudyState).values({ ownerId: user.userId, ...values }).onConflictDoNothing().returning({ version: userStudyState.version }).get()
-      : await db.update(userStudyState).set(values).where(and(eq(userStudyState.ownerId, user.userId), eq(userStudyState.version, input.version))).returning({ version: userStudyState.version }).get();
+      ? await db.insert(userStudyState).values({ ownerId: user.userId, ...values }).onConflictDoNothing().returning({ version: userStudyState.version }).then(rows => rows[0])
+      : await db.update(userStudyState).set(values).where(and(eq(userStudyState.ownerId, user.userId), eq(userStudyState.version, input.version))).returning({ version: userStudyState.version }).then(rows => rows[0]);
     if (!result) return json({ error: "Seus estudos foram alterados em outra janela. Recarregue para obter a versão mais recente." }, 409);
     return json({ version: result.version });
   } catch {

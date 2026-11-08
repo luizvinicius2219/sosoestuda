@@ -91,7 +91,7 @@ export function createInitialState(demo = true): StudyState {
   const today = todayKey();
   const subjects = coreSubjects.map((s) => ({ ...s, topics: [...s.topics] }));
   const state: StudyState = {
-    profile: { name: demo ? "Soso" : "Estudante", goal: "Minha aprovação no Judiciário", dailyMinutes: 120, weeklyMinutes: 600, examDate: "" },
+    profile: { name: "Sofia", goal: "Minha aprovação no Judiciário", dailyMinutes: 120, weeklyMinutes: 600, examDate: "" },
     subjects, tasks: [], notes: [], errors: [], reviews: [], sessions: [], completedTopics: [],
   };
   if (!demo) return state;
