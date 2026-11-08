@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSofiaUser } from "@/lib/auth";
 import { getDb } from "@/db";
 import { userStudyState } from "@/db/schema";
-import { createInitialState, studyStateSchema } from "@/lib/study";
+import { createInitialState, reconcileStudyState, studyStateSchema } from "@/lib/study";
 
 export const dynamic = "force-dynamic";
 const MAX_BYTES = 512 * 1024;
@@ -19,9 +19,10 @@ export async function GET() {
   if (!user) return json({ error: "Entre na sua conta para sincronizar seus estudos." }, 401);
   try {
     const row = await getDb().select().from(userStudyState).where(eq(userStudyState.ownerId, user.userId)).then(rows => rows[0]);
-    const state = row ? studyStateSchema.parse(JSON.parse(row.stateJson)) : createInitialState(false);
+    const original = row ? studyStateSchema.parse(JSON.parse(row.stateJson)) : createInitialState(false);
+    const state = reconcileStudyState(original);
     if (!row) state.profile.name = (user.name).slice(0, 80);
-    return json({ state, version: row?.version ?? 0, user: { name: user.name, email: user.email } });
+    return json({ state, migrationNeeded: !!row && JSON.stringify(state) !== JSON.stringify(original), version: row?.version ?? 0, user: { name: user.name, email: user.email } });
   } catch {
     return json({ error: "Não foi possível carregar seus estudos. Tente novamente." }, 503);
   }
@@ -66,7 +67,7 @@ export async function PUT(request: Request) {
   try {
     const db = getDb();
     const nextVersion = input.version + 1;
-    const values = { stateJson: JSON.stringify(input.state), version: nextVersion, updatedAt: new Date().toISOString() };
+    const values = { stateJson: JSON.stringify(reconcileStudyState(input.state)), version: nextVersion, updatedAt: new Date().toISOString() };
     const result = input.version === 0
       ? await db.insert(userStudyState).values({ ownerId: user.userId, ...values }).onConflictDoNothing().returning({ version: userStudyState.version }).then(rows => rows[0])
       : await db.update(userStudyState).set(values).where(and(eq(userStudyState.ownerId, user.userId), eq(userStudyState.version, input.version))).returning({ version: userStudyState.version }).then(rows => rows[0]);

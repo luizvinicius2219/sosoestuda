@@ -38,7 +38,9 @@ test("stats count this civil week and a streak ending yesterday", () => {
   assert.equal(stats.accuracy, 90);
   assert.equal(stats.streak, 2);
   assert.equal(stats.completedTopics, 1);
-  assert.equal(stats.xp, 319);
+  assert.equal(stats.baseXp, 319);
+  assert.equal(stats.achievementXp, 125);
+  assert.equal(stats.xp, 444);
   assert.equal(calculateStats(state, "2026-11-09").streak, 1);
 });
 
@@ -90,7 +92,8 @@ test("stats ignore invalid and future sessions instead of creating impossible XP
   assert.equal(stats.streak, 0);
   state.sessions.push({ id: "valid", subjectId: "portugues", topic: "Texto", minutes: 25, questions: 10, correct: 10, date: "2026-11-07" });
   stats = calculateStats(state, "2026-11-07");
-  assert.equal(stats.xp, 80);
+  assert.equal(stats.baseXp, 80);
+  assert.equal(stats.xp, 130);
   assert.equal(stats.accuracy, 100);
   assert.equal(stats.streak, 1);
   assert.equal(calculateStats(state, "2026-11-11").streak, 0);

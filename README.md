@@ -1,6 +1,6 @@
 # SosoEstuda — espaço pessoal da Sofia
 
-Aplicativo de estudos com missões, cronômetro, edital por tópicos, revisões espaçadas, anotações, caderno de erros, estatísticas e conquistas. Interface responsiva com mascote e XP.
+Aplicativo de estudos com missões, cronômetro, edital por tópicos, revisões por ciclos, anotações, caderno de erros, estatísticas e conquistas. Interface responsiva com mascote e XP.
 
 ## Hospedagem e privacidade
 
@@ -56,6 +56,14 @@ Dados privados não fazem parte deste repositório. O arquivo `.private/plano-so
 - Em um computador privado com `.env.local`: `npm run planner:import -- .private/plano-sofia.json`. Opcionalmente, definir `PLANNER_IMPORT_FILE` no preparo inicial da conta, para importar logo após criar o usuário. Essa variável não é necessária na Vercel.
 
 Não use a tela de importação para abrir o PDF: ela recebe o JSON organizacional já extraído e revisado. Não há cópia das aulas ou dos bancos de questões. As datas são as previstas no material de origem, com confirmação manual de mudanças e sem promessa de atualização automática da plataforma do curso.
+
+### Revisões, Pomodoro e conquistas
+
+Com um ciclo importado, as revisões seguem as janelas cumulativas, os ciclos agrupados já estudados e a revisão final do calendário (página 6 do material organizacional). No Flex, as etapas intermediárias acompanham o início escolhido. Registros antigos com revisão no dia seguinte são migrados sem apagar os estudos. Cada revisão permanece pendente até ser concluída; “Preciso retomar” mantém a etapa, enquanto as outras respostas avançam para a próxima janela prevista. Alterar uma semana recalcula datas sem reabrir uma revisão já concluída.
+
+O **Timer Pomodoro** permite tempos personalizados, pausas curta/longa, rodadas, início automático opcional, som e notificações do navegador. O timer e suas preferências são guardados neste navegador; o estudo confirmado é sincronizado com o PostgreSQL. Somente o tempo de foco entra no registro. Blocos completos contam para conquistas; reiniciar ou pular não concede um bloco completo. Alertas dependem do app aberto e das permissões do navegador.
+
+O mural tem 31 conquistas com progresso e bônus únicos de XP. Medalhas ficam registradas na conta mesmo quando uma sequência termina. O XP combina estudo e conquistas; cada 500 XP sobe um nível, com novos títulos durante a jornada.
 
 ### Banco e recorrência
 

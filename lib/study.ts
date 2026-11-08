@@ -1,16 +1,20 @@
 import { z } from "zod";
 import { plannerSchema, plannerRefSchema, type StudyPlanner, type PlannerRef } from "./planner-schema.ts";
+import { reconcileReviews } from "./reviews.ts";
+import { achievementsFor } from "./achievements.ts";
 
 export type Subject = { id: string; name: string; color: string; short: string; topics: string[]; source?: string };
 export type StudyTask = { id: string; subjectId: string; title: string; minutes: number; date: string; done: boolean; recordedMinutes?: number; plannerRef?: PlannerRef };
 export type StudyNote = { id: string; subjectId: string; title: string; content: string; updatedAt: string };
 export type StudyError = { id: string; subjectId: string; question: string; answer: string; reason: string; createdAt: string; resolved: boolean };
-export type Review = { id: string; subjectId: string; title: string; dueDate: string; interval: number };
-export type StudySession = { id: string; subjectId: string; topic: string; minutes: number; questions: number; correct: number; date: string; plannerRef?: PlannerRef };
+export type Review = { id: string; subjectId: string; title: string; dueDate: string; interval: number; completed?: boolean; calendar?: { cycleIds: string[]; sourceDate: string; afterDate?: string; weekId?: string; endDate?: string; label?: string } };
+export type StudySession = { id: string; subjectId: string; topic: string; minutes: number; questions: number; correct: number; date: string; plannerRef?: PlannerRef; pomodoros?: number };
 export type StudyState = {
   profile: { name: string; goal: string; dailyMinutes: number; weeklyMinutes: number; examDate: string };
   subjects: Subject[]; tasks: StudyTask[]; notes: StudyNote[]; errors: StudyError[];
   reviews: Review[]; sessions: StudySession[]; completedTopics: string[]; planner?: StudyPlanner;
+  reviewCompletions?: { id: string; reviewId: string; date: string; weekId?: string }[];
+  achievements?: { id: string; date: string }[];
 };
 
 export const STUDY_TIMEZONE = "America/Recife";
@@ -53,9 +57,11 @@ export const studyStateSchema = z.object({
   tasks: z.array(z.object({ id, subjectId: id, title, minutes: z.number().int().min(5).max(480).multipleOf(5), date, done: z.boolean(), recordedMinutes: z.number().int().min(0).max(100000).optional(), plannerRef: plannerRefSchema.optional() }).strict()).max(1000),
   notes: z.array(z.object({ id, subjectId: id, title, content: z.string().trim().min(1).max(15000), updatedAt: timestamp }).strict()).max(500),
   errors: z.array(z.object({ id, subjectId: id, question: z.string().trim().min(1).max(3000), answer: z.string().trim().min(1).max(6000), reason: z.string().trim().min(1).max(1000), createdAt: timestamp, resolved: z.boolean() }).strict()).max(1000),
-  reviews: z.array(z.object({ id, subjectId: id, title, dueDate: date, interval: z.number().int().min(1).max(365) }).strict()).max(1000),
-  sessions: z.array(z.object({ id, subjectId: id, topic: title, minutes: z.number().int().min(1).max(720), questions: z.number().int().min(0).max(1000), correct: z.number().int().min(0).max(1000), date, plannerRef: plannerRefSchema.optional() }).strict().refine((s) => s.correct <= s.questions, "Acertos não podem ultrapassar questões.")).max(5000),
+  reviews: z.array(z.object({ id, subjectId: id, title, dueDate: date, interval: z.number().int().min(1).max(365), completed: z.boolean().optional(), calendar: z.object({ cycleIds: z.array(id).max(30), sourceDate: date, afterDate: date.optional(), weekId: id.optional(), endDate: date.optional(), label: title.optional() }).strict().optional() }).strict()).max(1000),
+  sessions: z.array(z.object({ id, subjectId: id, topic: title, minutes: z.number().int().min(1).max(720), questions: z.number().int().min(0).max(1000), correct: z.number().int().min(0).max(1000), date, plannerRef: plannerRefSchema.optional(), pomodoros: z.number().int().min(0).max(144).optional() }).strict().refine((s) => s.correct <= s.questions && (s.pomodoros || 0) <= s.minutes, "Confira os acertos e o tempo dos Pomodoros.")).max(5000),
   completedTopics: z.array(z.string().min(1).max(110)).max(60000),
+  reviewCompletions: z.array(z.object({ id: z.string().min(1).max(220), reviewId: id, date, weekId: id.optional() }).strict()).max(5000).optional(),
+  achievements: z.array(z.object({ id, date }).strict()).max(100).optional(),
 }).strict().superRefine((state, ctx) => {
   const subjects = new Map(state.subjects.map((s) => [s.id, s]));
   if (subjects.size !== state.subjects.length) ctx.addIssue({ code: "custom", path: ["subjects"], message: "Matérias com identificador repetido." });
@@ -66,6 +72,10 @@ export const studyStateSchema = z.object({
       if (ids.has(item.id)) ctx.addIssue({ code: "custom", path: [collection, i, "id"], message: "Identificador repetido." });
       ids.add(item.id);
     });
+  }
+  for (const collection of ["reviewCompletions", "achievements"] as const) {
+    const ids = (state[collection] || []).map(item => item.id);
+    if (new Set(ids).size !== ids.length) ctx.addIssue({ code: "custom", path: [collection], message: "Identificadores repetidos." });
   }
   for (const cycle of state.planner?.cycles || []) for (const block of cycle.blocks) {
     if (!subjects.has(block.subjectId)) ctx.addIssue({code:"custom",path:["planner","cycles"],message:"O bloco aponta para uma disciplina inexistente."});
@@ -137,12 +147,26 @@ export function calculateStats(state: StudyState, referenceDay = todayKey()) {
   const weekMinutes = validSessions.filter((s) => s.date >= monday).reduce((sum, s) => sum + s.minutes, 0);
   const knownTopics = new Set(state.subjects.flatMap((s) => s.topics.map((_, i) => topicKey(s.id, i))));
   const completedTopics = new Set(state.completedTopics.filter((key) => knownTopics.has(key))).size;
-  const xp = totalMinutes * 2 + correct * 3 + completedTopics * 25;
+  const baseXp = totalMinutes * 2 + correct * 3 + completedTopics * 25;
   const activeDays = new Set(validSessions.filter((s) => s.minutes > 0).map((s) => s.date));
   let day = activeDays.has(referenceDay) ? referenceDay : addDays(referenceDay, -1);
   let streak = 0;
   while (activeDays.has(day)) { streak += 1; day = addDays(day, -1); }
-  return { totalMinutes, accuracy: totalQuestions ? Math.round(correct / totalQuestions * 100) : 0, totalQuestions, xp, level: Math.floor(xp / 500) + 1, streak, weekMinutes, completedTopics, totalTopics: knownTopics.size };
+  let bestStreak = 0, run = 0, previous = "";
+  for (const date of [...activeDays].sort()) { run = previous && addDays(previous, 1) === date ? run + 1 : 1; bestStreak = Math.max(bestStreak, run); previous = date; }
+  const metrics = { totalMinutes, totalQuestions, correct, completedTopics, bestStreak, validSessions };
+  const achievements = achievementsFor(state, metrics, referenceDay);
+  const achievementXp = achievements.filter(a => a.unlocked).reduce((n,a) => n + a.xp, 0);
+  const xp = baseXp + achievementXp;
+  return { totalMinutes, accuracy: totalQuestions ? Math.round(correct / totalQuestions * 100) : 0, totalQuestions, xp, baseXp, achievementXp, achievements, level: Math.floor(xp / 500) + 1, streak, bestStreak, weekMinutes, completedTopics, totalTopics: knownTopics.size };
+}
+
+/** Keep earned medals even if a checklist is edited or a streak ends. */
+export function reconcileStudyState(state: StudyState, referenceDay = todayKey()): StudyState {
+  const next = reconcileReviews(state, referenceDay);
+  const earned = new Map((next.achievements || []).map(a => [a.id, a]));
+  for (const a of calculateStats(next, referenceDay).achievements) if (a.unlocked && !earned.has(a.id)) earned.set(a.id, { id: a.id, date: referenceDay });
+  return { ...next, achievements: [...earned.values()] };
 }
 
 /** Each outcome schedules from today so an overdue card cannot stay overdue. */
@@ -151,16 +175,16 @@ export function scheduleReview(review: Review, rating: "again" | "good" | "easy"
   return { ...review, interval, dueDate: addDays(referenceDay, interval) };
 }
 
-export function completeStudy(state: StudyState, input: { subjectId: string; topic: string; minutes: number; questions: number; correct: number; plannerRef?: PlannerRef }): StudyState {
+export function completeStudy(state: StudyState, input: { subjectId: string; topic: string; minutes: number; questions: number; correct: number; plannerRef?: PlannerRef; pomodoros?: number }): StudyState {
   const subject = state.subjects.find((s) => s.id === input.subjectId);
-  if (!subject || !input.topic.trim() || input.topic.length > 200 || !Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 720 || !Number.isInteger(input.questions) || input.questions < 0 || input.questions > 1000 || !Number.isInteger(input.correct) || input.correct < 0 || input.correct > input.questions) {
+  if (!subject || !input.topic.trim() || input.topic.length > 200 || !Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 720 || !Number.isInteger(input.questions) || input.questions < 0 || input.questions > 1000 || !Number.isInteger(input.correct) || input.correct < 0 || input.correct > input.questions || (input.pomodoros !== undefined && (!Number.isInteger(input.pomodoros) || input.pomodoros < 0 || input.pomodoros > Math.min(144,input.minutes)))) {
     throw new Error("Confira a matéria, o tempo e a quantidade de questões e acertos.");
   }
   const today = todayKey();
   const session: StudySession = { ...input, topic: input.topic.trim(), id: crypto.randomUUID(), date: today };
   const existingReview = state.reviews.find((r) => r.subjectId === input.subjectId && r.title === session.topic);
   const reviews = existingReview
-    ? state.reviews.map((review) => review.id === existingReview.id ? { ...review, dueDate: addDays(today, 1), interval: 1 } : review)
-    : [...state.reviews, { id: crypto.randomUUID(), subjectId: input.subjectId, title: session.topic, dueDate: addDays(today, 1), interval: 1 }];
-  return { ...state, sessions: [...state.sessions, session], reviews };
+    ? state.reviews.map((review) => review.id === existingReview.id ? state.planner ? review : { ...review, dueDate: addDays(today, 1), interval: 1 } : review)
+    : [...state.reviews, { id: crypto.randomUUID(), subjectId: input.subjectId, title: session.topic, dueDate: addDays(today, 1), interval: 1, ...(state.planner ? {calendar:{cycleIds:input.plannerRef ? [input.plannerRef.cycleId] : [],sourceDate:today}} : {}) }];
+  return reconcileStudyState({ ...state, sessions: [...state.sessions, session], reviews });
 }
