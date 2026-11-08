@@ -17,9 +17,11 @@
     "prebuild": "node --experimental-strip-types scripts/prepare-private-account.mjs"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.114",
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.7.1",
     "@shadcn/react": "^0.3.0",
+    "ai": "^7.0.165",
     "better-auth": "^1.7.18",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

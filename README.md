@@ -20,7 +20,7 @@ O repositório contém código e exemplos sem credenciais. Nunca adicione senha,
 6. Remova `SOFIA_INITIAL_PASSWORD` do ambiente após criar a conta. Essa variável não é necessária na Vercel.
 7. Faça o deploy. Sem configuração privada, a tela aparece, mas nenhum acesso aos estudos é liberado.
 
-O banco e a criação real da conta aguardam a escolha do projeto na Vercel. Não há senha padrão ou acesso alternativo. Recuperação por e-mail ainda não configurada; o responsável administra a recuperação.
+A instalação pessoal usa PostgreSQL pelo Marketplace da Vercel e conta privada. Não há senha padrão ou acesso alternativo. Recuperação por e-mail ainda não configurada; o responsável administra a recuperação.
 
 ## Desenvolvimento
 
@@ -38,7 +38,15 @@ Não use dados de produção para testes. A conta da Sofia só deve ser criada e
 
 ## IA e fontes oficiais
 
-Opcionalmente configure `OPENAI_API_KEY` + `OPENAI_MODEL`, ou `GEMINI_API_KEY` + `GEMINI_MODEL`, apenas no servidor. Sem estas variáveis a IA permanece desligada. Nenhuma chave é enviada ao navegador.
+A **Lia** é a assistente pessoal de IA, com linguagem de amiga e foco na aprovação. Configure `GEMINI_API_KEY` como segredo no servidor e, opcionalmente, `GEMINI_MODEL` (padrão: `gemini-3.1-flash-lite`). Nenhuma chave é enviada ao navegador. A implementação usa AI SDK 7 e o provedor oficial Google.
+
+Ela conversa sobre estudos e assuntos gerais; consulta os registros da conta; cria e atualiza estudos, missões, anotações, erros, disciplinas, tópicos, metas, compromissos e o calendário do ciclo. Gerar missões usa as mesmas regras do planejamento. O app calcula XP e revisões, sem permitir que o modelo fabrique conquistas ou Pomodoros. Somente pedidos diretos da estudante autorizam registros. Não há ferramentas de exclusão, pagamentos, contas externas ou execução de código.
+
+O histórico e os comprovantes de ações ficam no PostgreSQL, no estado privado da conta. O cliente salva alterações pendentes antes de enviar mensagens; o servidor aplica ações validadas em uma cópia e grava tudo ao final com controle de versão. Reenviar a mesma solicitação não duplica ações. Falhas no provedor descartam a cópia; mudanças de outra janela produzem conflito sem sobrescrever dados. O histórico recente enviado ao modelo é limitado e dados de documentos, páginas e anotações são tratados como conteúdo não confiável.
+
+As consultas externas podem ser ligadas/desligadas por mensagem, assim como as ações no app. A busca usa Google Search pelo Gemini e depende da cota desse recurso no projeto Google; erro de cota não vira uma suposta pesquisa concluída. Há também leitura de páginas HTTPS públicas informadas pela estudante ou encontradas nas fontes consultadas, e acesso ao radar oficial. A leitura valida DNS e bloqueia redes privadas, metadados, credenciais e redirecionamentos inseguros; não envia cookies do app. Links que exigem login, bloqueiam robôs ou não retornam texto precisam ser abertos pela estudante. Respostas com pesquisa exibem fontes e, quando fornecidas pelo Google, sugestões de busca isoladas em iframe sem scripts.
+
+A chave é gerenciada pela Vercel; nenhuma credencial ou conversa privada deve ser incluída no Git. As notificações de foco continuam dependendo do app aberto.
 
 O radar consulta o [RSS oficial do STJ](https://www.stj.jus.br/sites/portalp/Paginas/RSS.aspx) e usa uma seleção identificada de fontes oficiais verificada em 07/11/2026 quando não há itens adequados. A trilha de matérias é geral e deve ser adaptada ao edital/cargo. Importação inicial por texto, sem extração automática de PDF. Notificações de foco precisam do app aberto.
 

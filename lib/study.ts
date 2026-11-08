@@ -2,6 +2,7 @@ import { z } from "zod";
 import { plannerSchema, plannerRefSchema, type StudyPlanner, type PlannerRef } from "./planner-schema.ts";
 import { reconcileReviews } from "./reviews.ts";
 import { achievementsFor } from "./achievements.ts";
+import { assistantMessageSchema, type AssistantMessage } from "./assistant-schema.ts";
 
 export type Subject = { id: string; name: string; color: string; short: string; topics: string[]; source?: string };
 export type StudyTask = { id: string; subjectId: string; title: string; minutes: number; date: string; done: boolean; recordedMinutes?: number; plannerRef?: PlannerRef };
@@ -15,6 +16,7 @@ export type StudyState = {
   reviews: Review[]; sessions: StudySession[]; completedTopics: string[]; planner?: StudyPlanner;
   reviewCompletions?: { id: string; reviewId: string; date: string; weekId?: string }[];
   achievements?: { id: string; date: string }[];
+  assistantMessages?: AssistantMessage[];
 };
 
 export const STUDY_TIMEZONE = "America/Recife";
@@ -62,6 +64,7 @@ export const studyStateSchema = z.object({
   completedTopics: z.array(z.string().min(1).max(110)).max(60000),
   reviewCompletions: z.array(z.object({ id: z.string().min(1).max(220), reviewId: id, date, weekId: id.optional() }).strict()).max(5000).optional(),
   achievements: z.array(z.object({ id, date }).strict()).max(100).optional(),
+  assistantMessages: z.array(assistantMessageSchema).max(40).optional(),
 }).strict().superRefine((state, ctx) => {
   const subjects = new Map(state.subjects.map((s) => [s.id, s]));
   if (subjects.size !== state.subjects.length) ctx.addIssue({ code: "custom", path: ["subjects"], message: "Matérias com identificador repetido." });
