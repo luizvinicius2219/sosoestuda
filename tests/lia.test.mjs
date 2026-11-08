@@ -54,13 +54,13 @@ test('calendar actions and week generation use existing planner rules and are id
  state=applyAssistantAction(state,{type:'calendar',examDate:'2027-03-21'}).state;assert.equal(state.profile.examDate,'2027-03-21');assert.equal(state.planner.examDateConfirmed,false);
 });
 test('the SDK tool loop executes a valid action once, returns a receipt and leaves its input unchanged',async()=>{
- const state=createInitialState(false);const model=new MockLanguageModelV4({doGenerate:[call('organizar_estudos',input),call('organizar_estudos',input,'c2'),done]});
+ const state=createInitialState(false);const model=new MockLanguageModelV4({doGenerate:[call('registrar_estudo',Object.fromEntries(Object.entries(input).filter(([key])=>key!=='type'))),call('registrar_estudo',Object.fromEntries(Object.entries(input).filter(([key])=>key!=='type')),'c2'),done]});
  const result=await runLia({state,message:'Registre meu estudo.',actions:true,web:false,modelOverride:model,signal:AbortSignal.timeout(5000)});
  assert.equal(result.state.sessions.length,1);assert.equal(result.receipts.length,1);assert.equal(state.sessions.length,0);assert.equal(result.answer,done.content[0].text);
 });
 test('disabling actions and internet is enforced by tools even if a model attempts calls',async()=>{
  const state=createInitialState(false);let researched=false;
- const model=new MockLanguageModelV4({doGenerate:[call('organizar_estudos',input),call('pesquisar_internet',{query:'Teste'},'c2'),done]});
+ const model=new MockLanguageModelV4({doGenerate:[call('registrar_estudo',Object.fromEntries(Object.entries(input).filter(([key])=>key!=='type'))),call('pesquisar_internet',{query:'Teste'},'c2'),done]});
  const result=await runLia({state,message:'Só converse.',actions:false,web:false,modelOverride:model,researchOverride:async()=>{researched=true;return {text:'x',sources:[]};},signal:AbortSignal.timeout(5000)});
  assert.equal(result.receipts.length,0);assert.equal(result.state.sessions.length,0);assert.equal(researched,false);
 });
@@ -88,6 +88,15 @@ test('historical study registration uses the actual date, updates progress on co
 });
 test('a failed provider call after staged actions cannot mutate the original persisted snapshot',async()=>{
  const state=createInitialState(false),original=structuredClone(state);
- const model=new MockLanguageModelV4({doGenerate:[call('organizar_estudos',input),()=>{throw new Error('Provider unavailable');}]});
+ const model=new MockLanguageModelV4({doGenerate:[call('registrar_estudo',Object.fromEntries(Object.entries(input).filter(([key])=>key!=='type'))),()=>{throw new Error('Provider unavailable');}]});
  await assert.rejects(runLia({state,message:'Registre.',actions:true,web:false,modelOverride:model,signal:AbortSignal.timeout(5000)}));assert.deepEqual(state,original);
+});
+test('separate mission and agenda tools write to the intended screens',async()=>{
+ const state=plannerState();
+ const mission=new MockLanguageModelV4({doGenerate:[call('salvar_missao',{subjectId:'portugues',title:'Estudar texto',minutes:5,date:todayKey()}),done]});
+ const planned=await runLia({state,message:'Crie uma missão de estudo.',actions:true,web:false,modelOverride:mission,signal:AbortSignal.timeout(5000)});
+ assert.equal(planned.state.tasks.length,1);assert.equal(planned.state.planner.events.length,0);assert.equal(planned.receipts[0].type,'task');
+ const agenda=new MockLanguageModelV4({doGenerate:[call('salvar_compromisso',{title:'Mentoria',date:todayKey(),kind:'mentoring'}),done]});
+ const event=await runLia({state,message:'Agende uma mentoria.',actions:true,web:false,modelOverride:agenda,signal:AbortSignal.timeout(5000)});
+ assert.equal(event.state.tasks.length,0);assert.equal(event.state.planner.events.length,1);assert.equal(event.receipts[0].type,'event');
 });
