@@ -52,7 +52,7 @@ export async function runLia({state,message,web,actions,signal,modelOverride,res
     subject:["salvar_disciplina","Adiciona disciplina ou acrescenta tópicos a uma existente. Use id apenas ao atualizar; tópicos anteriores são preservados."],
     review:["concluir_revisao","Registra como foi uma revisão disponível hoje. Mantém o calendário de revisão por ciclos."],
     event:["salvar_compromisso","AGENDA ESPECIAL: somente mentoria, simulado, redação ou compromisso pessoal. NÃO use para missão/tarefa/bloco de estudo de uma disciplina: esses pertencem a salvar_missao."],
-    calendar:["ajustar_calendario","Altera ritmo, carga, início do ciclo ou data prevista da prova a pedido da Sofia."],
+    calendar:["ajustar_calendario","Altera ritmo, carga, início do ciclo ou data prevista da prova a pedido da Sofia. Para mudar ao ritmo Padrão, omita cycleStart quando ela não especificar um novo início: o app aplica a sequência da página 6 e calcula a data correta."],
     move_week:["reagendar_semana","Move uma semana existente no calendário do ciclo, respeitando seu identificador."],
     generate_week:["gerar_missoes_semana","Gera missões de estudo de uma semana do ciclo, sem duplicar as já existentes."],
   };

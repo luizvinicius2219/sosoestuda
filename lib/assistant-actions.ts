@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { civilDate, plannerEventSchema } from "./planner-schema.ts";
 import { addDays, calculateStats, completeStudy, reconcileStudyState, studyStateSchema, todayKey, topicKey, type StudyState } from "./study.ts";
-import { buildWeeks, calendarWarnings, generateWeekTasks, monday } from "./planner.ts";
+import { buildWeeks, calendarWarnings, generateWeekTasks, monday, standardCalendarStart } from "./planner.ts";
 import { completeReview } from "./reviews.ts";
 import type { AssistantActionReceipt } from "./assistant-schema.ts";
 
@@ -84,7 +84,10 @@ export function applyAssistantAction(state:StudyState,raw:unknown):{state:StudyS
       next.planner.events=save(next.planner.events,plannerEventSchema.parse({id:recordId,title:action.title,date:action.date,time:action.time,kind:action.kind,plannedMinutes:action.plannedMinutes,completed:action.completed,notes:action.notes,result:action.result}),action.id);recordTitle=`Agenda: ${action.title}`;break;
     }
     case "calendar":{
-      if(!next.planner)throw new Error("Nenhum calendário importado.");next.planner={...next.planner,...(action.variant?{variant:action.variant}:{}),...(action.mode?{mode:action.mode}:{}),...(action.cycleStart?{cycleStart:action.cycleStart}:{}),...(action.examDate?{examDate:action.examDate,examDateConfirmed:false}:{})};
+      if(!next.planner)throw new Error("Nenhum calendário importado.");
+      const enteringStandard=action.variant==="standard"&&next.planner.variant!=="standard";
+      next.planner={...next.planner,...(action.variant?{variant:action.variant}:{}),...(action.mode?{mode:action.mode}:{}),...(action.cycleStart?{cycleStart:action.cycleStart}:{}),...(action.examDate?{examDate:action.examDate,examDateConfirmed:false}:{})};
+      if(enteringStandard&&!action.cycleStart)next.planner.cycleStart=standardCalendarStart(next.planner);
       if(action.examDate)next.profile.examDate=action.examDate;warnings=calendarWarnings(next.planner);recordId="calendar";recordTitle="Calendário do ciclo atualizado";break;
     }
     case "move_week":{

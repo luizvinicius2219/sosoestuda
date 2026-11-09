@@ -56,6 +56,8 @@ Referências: [Better Auth](https://better-auth.com/docs/installation), [autenti
 
 A aba **Meu ciclo** recebe um plano JSON privado e oferece calendário Padrão, Flex, Speed, Intensivo e opções de recomeço; carga padrão ou essencial; blocos de estudo; tempo por bloco; etapas de diagnóstico, estudo, questões, erros e revisão; agenda de redação, simulados e mentorias; resultados; e revisão final. A data da prova precisa ser conferida pelo aluno no edital oficial.
 
+O ritmo Padrão segue a sequência da página 6, incluindo duas semanas separadas de ambientação. Para a data prevista de 14/03/2027 do material, o ciclo 1 começa em 02/11/2026, as cumulativas em 07/12/2026 e 18/01/2027, e a revisão final em 01/03/2027 e 08/03/2027. Ao mudar de outro ritmo para Padrão sem pedir um novo início, o calendário preenche a data coerente com essa sequência.
+
 As semanas e os compromissos recorrentes são calculados a partir das datas. Gerar missões é idempotente: repetir a ação preserva missões existentes e o histórico. A carga é sugerida e o app sinaliza excesso em relação à meta diária. O modo essencial omite blocos de Matemática; não omite blocos jurídicos que substituem matérias em um ciclo específico. Atualizar um plano da mesma fonte preserva o andamento; ajustar o conteúdo de um bloco reinicia somente suas etapas. Sessões anteriores são preservadas.
 
 Dados privados não fazem parte deste repositório. O arquivo `.private/plano-sofia.json` foi preparado apenas no computador do responsável e é excluído por `.gitignore` e `.vercelignore`. O app não hospeda o PDF original ou o material do curso. Há duas formas de importar:

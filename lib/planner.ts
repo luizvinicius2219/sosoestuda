@@ -24,9 +24,23 @@ export function buildWeeks(plan:StudyPlanner):PlannerWeek[] {
     const override=plan.overrides.find(o=>o.weekId===id);const start=override?monday(override.start):originalStart;
     return {...r,id,start,end:addDays(start,6),originalStart,notes:override?.notes||""};
   });
-  if(!["emergency","super-emergency"].includes(plan.variant)){const end=addDays(monday(plan.cycleStart),-1),start=addDays(monday(plan.cycleStart),plan.variant==="standard"?-14:-7);weeks.unshift({id:`${plan.variant}-orientation`,start,end,originalStart:start,kind:"orientation",cycleIds:[],title:"Ambientação e organização",notes:""});}
+  if(!["emergency","super-emergency"].includes(plan.variant)){
+    const count=plan.variant==="standard"?2:1;
+    for(let i=0;i<count;i++){
+      const originalStart=addDays(monday(plan.cycleStart),-7*(count-i)),id=`${plan.variant}-orientation${i?i+1:""}`;
+      const override=plan.overrides.find(o=>o.weekId===id),start=override?monday(override.start):originalStart;
+      weeks.push({id,start,end:addDays(start,6),originalStart,kind:"orientation",cycleIds:[],title:"Ambientação e organização",notes:override?.notes||""});
+    }
+  }
   for(let i=0;i<finalWeeks;i++){const originalStart=addDays(finalStart,i*7),id=`${plan.variant}-final${i+1}`,override=plan.overrides.find(o=>o.weekId===id);const start=override?monday(override.start):originalStart;weeks.push({id,start,end:addDays(start,6)<plan.examDate?addDays(start,6):addDays(plan.examDate,-1),originalStart,kind:"final",cycleIds:[],title:"Revisão final",notes:override?.notes||""});}
   return weeks.sort((a,b)=>a.start.localeCompare(b.start)||a.id.localeCompare(b.id));
+}
+/** Page 6 standard sequence: initial cycles, cumulative reviews, grouped cycles, then two final weeks. */
+export function standardCalendarStart(plan:StudyPlanner):string {
+  const weeks=buildWeeks({...plan,variant:"standard",overrides:[]});
+  const final=weeks.find(w=>w.kind==="final")!;
+  const count=weeks.filter(w=>w.kind!=="orientation"&&w.kind!=="final").length;
+  return addDays(final.start,-count*7);
 }
 export function calendarWarnings(plan:StudyPlanner):string[] {
   const weeks=buildWeeks(plan),warnings:string[]=[];

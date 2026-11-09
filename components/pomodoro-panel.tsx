@@ -1,5 +1,6 @@
 "use client";
 
+import SofiaCharacter from "./sofia-character";
 import { useEffect, useRef, useState } from "react";
 import { Coffee, Pause, Play, RotateCcw, Settings2, SkipForward, Timer, X } from "lucide-react";
 import { z } from "zod";
@@ -119,7 +120,7 @@ export default function PomodoroPanel({subjects,storageKey,expanded,request,rece
       <p className="pomodoro-notice" role="status">{notice||"Um bloco de cada vez. As pausas também fazem parte do caminho."}</p>
     </div>
     <div className="pomodoro-side"><h2>Prepare seu foco</h2><label className="form-field">Disciplina<select className="form-select" value={context.subjectId} disabled={active} onChange={e=>setContext({subjectId:e.target.value,topic:context.topic})}>{subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label className="form-field">O que você vai estudar?<input className="form-input" value={context.topic} maxLength={200} disabled={active} onChange={e=>setContext({...context,topic:e.target.value||"Sessão livre de estudo"})}/></label>
-      <div className="pomodoro-bank"><span>FOCO PARA REGISTRAR</span><strong>{Math.floor(timer.focusMs/60000)} min</strong><p>{timer.completedFocus} {timer.completedFocus===1?"Pomodoro completo":"Pomodoros completos"} · pausas excluídas</p></div>
+      <div className="pomodoro-companion"><SofiaCharacter pose={timer.phase!=="focus"?"wave":timer.running?"laptop":timer.completedFocus>0?"celebrate":"read"}/><p>{timer.phase!=="focus"?"Respira. Você também merece essa pausa.":timer.running?"Um pouquinho de foco, um passo mais perto.":timer.completedFocus>0?"Mais um bloco conquistado. Olha você evoluindo!":"Seu próximo capítulo começa neste bloco."}</p></div><div className="pomodoro-bank"><span>FOCO PARA REGISTRAR</span><strong>{Math.floor(timer.focusMs/60000)} min</strong><p>{timer.completedFocus} {timer.completedFocus===1?"Pomodoro completo":"Pomodoros completos"} · pausas excluídas</p></div>
       <button className="primary-button" disabled={timer.focusMs<60000} onClick={register}>Registrar estudo e ganhar XP</button><small>O registro pede sua confirmação. Só os blocos completos contam como Pomodoros; o foco parcial também conta como tempo estudado.</small>
       {active&&<button className="ghost-button" onClick={()=>{if(window.confirm("Descartar todo o tempo ainda não registrado e recomeçar?"))setTimer(newTimer(settings));}}><X size={15}/>Descartar sessão</button>}
       <button className="section-link" onClick={()=>setOptions(!options)}><Settings2 size={15}/>{options?"Fechar configurações":"Personalizar meu ritmo"}</button>

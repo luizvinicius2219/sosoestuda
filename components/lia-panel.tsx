@@ -1,7 +1,8 @@
 "use client";
 
+import SofiaCharacter from "./sofia-character";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, CheckCheck, Globe2, MessageCircle, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowUp, CheckCheck, Globe2, RefreshCw, Sparkles } from "lucide-react";
 import type { AssistantMessage } from "@/lib/assistant-schema";
 
 const prompts=["Me ajude a organizar meus estudos de hoje.","Registre um estudo que acabei de fazer.","Pesquise novidades oficiais sobre o meu concurso.","Me explique uma dúvida e faça perguntas para eu praticar."];
@@ -37,10 +38,10 @@ export default function LiaPanel({messages,configured,busy,initialPrompt,onSend}
     catch(e){setError(e instanceof Error?e.message:"Não consegui enviar agora. Tente novamente.");}
   }
   return <section className="lia-panel" aria-label="Conversa com a Lia">
-    <div className="lia-profile"><span className="lia-avatar large"><Sparkles size={28}/></span><div><span className="eyebrow">SUA PARCEIRA DE APROVAÇÃO</span><h1>Oi, eu sou a Lia <span>💜</span></h1><p>Vamos juntas: uma dúvida, um plano e uma conquista de cada vez.</p></div><span className={`lia-status ${configured?"online":""}`}>{configured?"Conectada ao Gemini":"Aguardando conexão"}</span></div>
+    <div className="lia-profile"><span className="lia-avatar large"><Sparkles size={28}/></span><div><span className="eyebrow">SUA PARCEIRA DE APROVAÇÃO</span><h1>Oi, eu sou a Lia <span>🌷</span></h1><p>Vamos juntas: uma dúvida, um plano e uma conquista de cada vez.</p></div><span className={`lia-status ${configured?"online":""}`}>{configured?"Conectada ao Gemini":"Aguardando conexão"}</span></div>
     {!configured&&<p className="inline-alert">A conexão com o Gemini ainda precisa ser configurada pelo responsável pelo app.</p>}
     <div className="lia-conversation" role="log" aria-label="Histórico da conversa" aria-live="polite" aria-busy={busy}>
-      {!messages.length&&<div className="lia-welcome"><MessageCircle size={30}/><h2>Em que eu te ajudo hoje, Sofia?</h2><p>Posso explicar conteúdos, pesquisar informações atuais e cuidar dos registros que você me pedir. Se faltar um detalhe, a gente resolve juntas.</p><div className="lia-starters">{prompts.map(prompt=><button className="secondary-button" key={prompt} disabled={busy||!configured} onClick={()=>{setText(prompt);input.current?.focus();}}>{prompt}</button>)}</div></div>}
+      {!messages.length&&<div className="lia-welcome"><SofiaCharacter pose="think" className="lia-welcome-character"/><h2>Em que eu te ajudo hoje, Sofia?</h2><p>Posso explicar conteúdos, pesquisar informações atuais e cuidar dos registros que você me pedir. Se faltar um detalhe, a gente resolve juntas.</p><div className="lia-starters">{prompts.map(prompt=><button className="secondary-button" key={prompt} disabled={busy||!configured} onClick={()=>{setText(prompt);input.current?.focus();}}>{prompt}</button>)}</div></div>}
       {messages.map(message=><Message key={message.id} message={message}/>)}
       {busy&&<><article className="lia-message user"><div className="lia-message-label">Você</div><div className="lia-message-content">{text}</div></article><div className="lia-thinking" role="status"><RefreshCw size={16} className="spin"/>A Lia está pensando e conferindo o que você pediu…</div></>}
       <div ref={bottom}/>

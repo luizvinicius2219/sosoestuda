@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createInitialState,studyStateSchema,completeStudy} from '../lib/study.ts';
 import {plannerSchema} from '../lib/planner-schema.ts';
-import {buildWeeks,calendarWarnings,generateWeekTasks,importPlanner,weekBlocks,blockMinutes,stepKey,stages} from '../lib/planner.ts';
+import {buildWeeks,calendarWarnings,generateWeekTasks,importPlanner,weekBlocks,blockMinutes,stepKey,stages,standardCalendarStart} from '../lib/planner.ts';
 function fixture(variant='standard',cycleStart='2026-11-02'){
  return plannerSchema.parse({title:'Plano de teste',source:'Material particular de teste',sourceVersion:'1',sourceUpdatedAt:'2026-10-19',checkedAt:'2026-11-08',examDate:'2027-03-14',examDateConfirmed:false,variant,mode:'standard',cycleStart,cycles:Array.from({length:10},(_,i)=>({id:`c${i+1}`,number:i+1,title:`Ciclo ${i+1}`,blocks:[{id:`b${i+1}`,subjectId:'portugues',subjectName:'Língua Portuguesa',title:`Bloco de teste ${i+1}`,topics:[`Tópico de teste ${i+1}`],minutes:120,family:'language'},{id:`math${i+1}`,subjectId:'matematica',subjectName:'Matemática',title:'Exercícios',topics:['Operações de teste'],minutes:60,family:'math'}]})),events:[],completedSteps:[],completedWeeks:[],overrides:[]});
 }
@@ -14,6 +14,34 @@ test('calendar preserves cycle, cumulative, grouped and final weeks across the y
  assert.deepEqual(weeks.filter(w=>w.kind==='final').map(w=>[w.start,w.end]),[['2027-03-01','2027-03-07'],['2027-03-08','2027-03-13']]);
  assert.equal(weeks.find(w=>w.title==='Ciclos 1 + 2').start,'2027-01-25');
  assert.equal(weeks[0].kind,'orientation');assert.equal(weeks[0].start,'2026-10-19');
+});
+test('page 6 standard calendar matches every weekly boundary, including both orientation weeks',()=>{
+ const weeks=buildWeeks(fixture());
+ const expected=[
+  ['2026-10-19','2026-10-25','orientation'],['2026-10-26','2026-11-01','orientation'],
+  ['2026-11-02','2026-11-08','cycle'],['2026-11-09','2026-11-15','cycle'],
+  ['2026-11-16','2026-11-22','cycle'],['2026-11-23','2026-11-29','cycle'],
+  ['2026-11-30','2026-12-06','cycle'],['2026-12-07','2026-12-13','cumulative'],
+  ['2026-12-14','2026-12-20','cycle'],['2026-12-21','2026-12-27','cycle'],
+  ['2026-12-28','2027-01-03','cycle'],['2027-01-04','2027-01-10','cycle'],
+  ['2027-01-11','2027-01-17','cycle'],['2027-01-18','2027-01-24','cumulative'],
+  ['2027-01-25','2027-01-31','cycle'],['2027-02-01','2027-02-07','cycle'],
+  ['2027-02-08','2027-02-14','cycle'],['2027-02-15','2027-02-21','cycle'],
+  ['2027-02-22','2027-02-28','cycle'],['2027-03-01','2027-03-07','final'],
+  ['2027-03-08','2027-03-13','final'],
+ ];
+ assert.deepEqual(weeks.map(w=>[w.start,w.end,w.kind]),expected);
+ assert.equal(weeks.find(w=>w.start<='2026-11-08'&&w.end>='2026-11-08').title,'Ciclo 1');
+ assert.equal(weeks.find(w=>w.start<='2026-11-09'&&w.end>='2026-11-09').title,'Ciclo 2');
+ assert.deepEqual(weeks.filter(w=>w.cycleIds.length>1).map(w=>w.cycleIds),[['c1','c2'],['c3','c4'],['c5','c6'],['c7','c8'],['c9','c10']]);
+});
+test('selecting standard computes its own start instead of keeping the imported Flex date',()=>{
+ const flex=fixture('flex','2026-11-16');assert.equal(standardCalendarStart(flex),'2026-11-02');
+ assert.equal(flex.variant,'flex');assert.equal(flex.cycleStart,'2026-11-16');
+ const standard={...flex,variant:'standard',cycleStart:standardCalendarStart(flex)};
+ assert.equal(buildWeeks(standard).find(w=>w.title==='Ciclo 1').start,'2026-11-02');
+ assert.equal(buildWeeks(standard).filter(w=>w.kind==='orientation').length,2);
+ assert.ok(!calendarWarnings(standard).some(w=>w.includes('sobrepostas')));
 });
 test('speed, intensive and restart calendars keep their distinct sequences',()=>{
  const speed=buildWeeks(fixture('speed','2026-12-14'));assert.equal(speed.find(w=>w.title==='Ciclo 6').start,'2027-01-25');

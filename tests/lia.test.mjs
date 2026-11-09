@@ -100,3 +100,11 @@ test('separate mission and agenda tools write to the intended screens',async()=>
  const event=await runLia({state,message:'Agende uma mentoria.',actions:true,web:false,modelOverride:agenda,signal:AbortSignal.timeout(5000)});
  assert.equal(event.state.tasks.length,0);assert.equal(event.state.planner.events.length,1);assert.equal(event.receipts[0].type,'event');
 });
+test('Lia switching to Standard uses the page 6 dates unless a new start was explicitly requested',()=>{
+ const state=plannerState();state.planner.variant='flex';state.planner.cycleStart='2026-11-16';
+ const next=applyAssistantAction(state,{type:'calendar',variant:'standard'}).state;
+ assert.equal(next.planner.variant,'standard');assert.equal(next.planner.cycleStart,'2026-11-02');
+ assert.equal(next.planner.mode,state.planner.mode);
+ const custom=applyAssistantAction(state,{type:'calendar',variant:'standard',cycleStart:'2026-11-09'}).state;
+ assert.equal(custom.planner.cycleStart,'2026-11-09');
+});
