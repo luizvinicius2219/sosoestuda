@@ -3,6 +3,9 @@ import { plannerSchema, plannerRefSchema, type StudyPlanner, type PlannerRef } f
 import { reconcileReviews } from "./reviews.ts";
 import { achievementsFor } from "./achievements.ts";
 import { assistantMessageSchema, type AssistantMessage } from "./assistant-schema.ts";
+import { questionRecordSchema, topicProgressSchema, type QuestionRecord, type TopicProgress } from "./notebook-schema.ts";
+import { ensureTjspSyllabus } from "./tjsp-syllabus.ts";
+import { questionMetrics } from "./notebook.ts";
 
 export type Subject = { id: string; name: string; color: string; short: string; topics: string[]; source?: string };
 export type StudyTask = { id: string; subjectId: string; title: string; minutes: number; date: string; done: boolean; recordedMinutes?: number; plannerRef?: PlannerRef };
@@ -11,6 +14,8 @@ export type StudyError = { id: string; subjectId: string; question: string; answ
 export type Review = { id: string; subjectId: string; title: string; dueDate: string; interval: number; completed?: boolean; calendar?: { cycleIds: string[]; sourceDate: string; afterDate?: string; weekId?: string; endDate?: string; label?: string } };
 export type StudySession = { id: string; subjectId: string; topic: string; minutes: number; questions: number; correct: number; date: string; plannerRef?: PlannerRef; pomodoros?: number };
 export type StudyState = {
+  questionRecords?: QuestionRecord[];
+  topicProgress?: TopicProgress[];
   profile: { name: string; goal: string; dailyMinutes: number; weeklyMinutes: number; examDate: string };
   subjects: Subject[]; tasks: StudyTask[]; notes: StudyNote[]; errors: StudyError[];
   reviews: Review[]; sessions: StudySession[]; completedTopics: string[]; planner?: StudyPlanner;
@@ -53,6 +58,8 @@ const subjectSchema = z.object({
 }).strict();
 
 export const studyStateSchema = z.object({
+  questionRecords: z.array(questionRecordSchema).max(5000).optional(),
+  topicProgress: z.array(topicProgressSchema).max(5000).optional(),
   profile: z.object({ name: z.string().trim().min(1).max(80), goal: z.string().trim().min(1).max(120), dailyMinutes: z.number().int().min(10).max(720), weeklyMinutes: z.number().int().min(10).max(5040), examDate: z.union([date, z.literal("")]) }).strict(),
   planner: plannerSchema.optional(),
   subjects: z.array(subjectSchema).min(1).max(60),
@@ -67,6 +74,18 @@ export const studyStateSchema = z.object({
   assistantMessages: z.array(assistantMessageSchema).max(40).optional(),
 }).strict().superRefine((state, ctx) => {
   const subjects = new Map(state.subjects.map((s) => [s.id, s]));
+  const questionIds = new Set<string>();
+  for (const q of state.questionRecords || []) {
+    if (!subjects.has(q.subjectId) || questionIds.has(q.id)) ctx.addIssue({code:"custom",path:["questionRecords"],message:"Disciplina inexistente ou registro repetido."});
+    if (q.syllabusTopic && !subjects.get(q.subjectId)?.topics.includes(q.syllabusTopic)) ctx.addIssue({code:"custom",path:["questionRecords"],message:"Tópico do edital inexistente."});
+    questionIds.add(q.id);
+  }
+  const progressKeys = new Set<string>();
+  for (const p of state.topicProgress || []) {
+    const key = JSON.stringify([p.subjectId,p.topic]);
+    if (!subjects.get(p.subjectId)?.topics.includes(p.topic) || progressKeys.has(key)) ctx.addIssue({code:"custom",path:["topicProgress"],message:"Progresso com tópico inexistente ou repetido."});
+    progressKeys.add(key);
+  }
   if (subjects.size !== state.subjects.length) ctx.addIssue({ code: "custom", path: ["subjects"], message: "Matérias com identificador repetido." });
   for (const collection of ["tasks", "notes", "errors", "reviews", "sessions"] as const) {
     const ids = new Set<string>();
@@ -112,7 +131,7 @@ export function createInitialState(demo = true): StudyState {
     profile: { name: "Sofia", goal: "Minha aprovação no Judiciário", dailyMinutes: 120, weeklyMinutes: 600, examDate: "" },
     subjects, tasks: [], notes: [], errors: [], reviews: [], sessions: [], completedTopics: [],
   };
-  if (!demo) return state;
+  if (!demo) return ensureTjspSyllabus(state);
   state.tasks = [
     { id: "task-1", subjectId: "constitucional", title: "Direitos e garantias fundamentais", minutes: 40, date: today, done: false },
     { id: "task-2", subjectId: "portugues", title: "Interpretação de textos", minutes: 30, date: today, done: false },
@@ -137,14 +156,15 @@ export function createInitialState(demo = true): StudyState {
     minutes: [35, 50, 45, 60, 40, 30, 25][i], questions: 20, correct: [17, 16, 18, 15, 16, 19, 17][i], date: addDays(today, -i),
   }));
   state.completedTopics = [topicKey("constitucional", 0), topicKey("portugues", 0), topicKey("administrativo", 0), topicKey("administrativo", 1), topicKey("processual-civil", 0)];
-  return state;
+  return ensureTjspSyllabus(state);
 }
 
 export function calculateStats(state: StudyState, referenceDay = todayKey()) {
   const validSessions = state.sessions.filter((s) => s.date <= referenceDay && isCivilDate(s.date) && Number.isInteger(s.minutes) && s.minutes >= 1 && s.minutes <= 720 && Number.isInteger(s.questions) && s.questions >= 0 && s.questions <= 1000 && Number.isInteger(s.correct) && s.correct >= 0 && s.correct <= s.questions);
   const totalMinutes = validSessions.reduce((sum, s) => sum + s.minutes, 0);
-  const totalQuestions = validSessions.reduce((sum, s) => sum + s.questions, 0);
-  const correct = validSessions.reduce((sum, s) => sum + s.correct, 0);
+  const notebook = questionMetrics((state.questionRecords || []).filter(q => q.date <= referenceDay));
+  const totalQuestions = validSessions.reduce((sum, s) => sum + s.questions, 0) + notebook.questions;
+  const correct = validSessions.reduce((sum, s) => sum + s.correct, 0) + notebook.correct;
   const weekday = new Date(`${referenceDay}T12:00:00.000Z`).getUTCDay();
   const monday = addDays(referenceDay, -((weekday + 6) % 7));
   const weekMinutes = validSessions.filter((s) => s.date >= monday).reduce((sum, s) => sum + s.minutes, 0);
@@ -166,7 +186,7 @@ export function calculateStats(state: StudyState, referenceDay = todayKey()) {
 
 /** Keep earned medals even if a checklist is edited or a streak ends. */
 export function reconcileStudyState(state: StudyState, referenceDay = todayKey()): StudyState {
-  const next = reconcileReviews(state, referenceDay);
+  const next = reconcileReviews(ensureTjspSyllabus(state), referenceDay);
   const earned = new Map((next.achievements || []).map(a => [a.id, a]));
   for (const a of calculateStats(next, referenceDay).achievements) if (a.unlocked && !earned.has(a.id)) earned.set(a.id, { id: a.id, date: referenceDay });
   return { ...next, achievements: [...earned.values()] };

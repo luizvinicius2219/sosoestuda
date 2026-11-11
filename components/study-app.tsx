@@ -9,11 +9,13 @@ import LiaPanel from "./lia-panel";
 import PomodoroPanel, { type FocusRegistration, type FocusRequest } from "./pomodoro-panel";
 import ReviewsPanel from "./reviews-panel";
 import AchievementsPanel from "./achievements-panel";
+import QuestionsPanel from "./questions-panel";
+import SyllabusPanel from "./syllabus-panel";
 import { levelTitle } from "@/lib/achievements";
 import type { PlannerRef } from "@/lib/planner-schema";
-import { addDays, calculateStats, completeStudy, createInitialState, reconcileStudyState, studyStateSchema, todayKey, topicKey, type StudyState, type StudyTask, type Subject, type StudyNote, type StudyError } from "@/lib/study";
+import { addDays, calculateStats, completeStudy, createInitialState, reconcileStudyState, studyStateSchema, todayKey, type StudyState, type StudyTask, type Subject, type StudyNote, type StudyError } from "@/lib/study";
 
-type Page = "lia" | "focus" | "cycles" | "home" | "planning" | "syllabus" | "reviews" | "errors" | "notes" | "news" | "achievements" | "stats" | "settings";
+type Page = "lia" | "focus" | "cycles" | "home" | "planning" | "syllabus" | "questions" | "reviews" | "errors" | "notes" | "news" | "achievements" | "stats" | "settings";
 type User = { name: string; email: string };
 type NewsItem = { tribunal: string; date: string; category: string; title: string; summary: string; url: string };
 type NewsData = { items: NewsItem[]; mode: "live" | "curated"; checkedAt: string; verifiedAt: string; message?: string };
@@ -25,6 +27,7 @@ const pages: { id: Page; label: string; icon: typeof BookOpen; section?: string 
   { id: "cycles", label: "Meu ciclo", icon: RefreshCw },
   { id: "planning", label: "Planejamento", icon: CalendarDays },
   { id: "syllabus", label: "Meu edital", icon: ListChecks },
+  { id: "questions", label: "Caderno de questões", icon: NotebookPen },
   { id: "reviews", label: "Revisões", icon: RefreshCw },
   { id: "errors", label: "Caderno de erros", icon: NotebookPen, section: "APRENDER E EVOLUIR" },
   { id: "notes", label: "Anotações", icon: Bookmark },
@@ -40,7 +43,7 @@ const safeUrl = (s?: string) => s && /^https?:\/\//i.test(s) ? s : undefined;
 
 export default function StudyApp({ initialUser }: { initialUser: User | null }) {
   const [page, setPage] = useState<Page>("home");
-  const [state, setState] = useState<StudyState>(() => createInitialState(!initialUser));
+  const [state, setState] = useState<StudyState>(() => reconcileStudyState(createInitialState(!initialUser)));
   const [loading, setLoading] = useState(!!initialUser);
   const [loadError, setLoadError] = useState("");
   const [sync, setSync] = useState("saved");
@@ -62,7 +65,6 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
   const [newsError, setNewsError] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedTopic, setSelectedTopic] = useState("");
-  const [studyTopicChoice, setStudyTopicChoice] = useState("custom");
   const [selectedTask, setSelectedTask] = useState("");
   const [selectedPlannerRef, setSelectedPlannerRef] = useState<PlannerRef | undefined>();
   const [editingTask, setEditingTask] = useState<StudyTask | null>(null);
@@ -194,13 +196,13 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
   function navigate(p: Page) { setPage(p); setQuery("");setFilter("all");setMobileOpen(false);window.history.pushState(null,"",`#${p}`); }
   function openModal(m: Modal) { setFormError(""); setModal(m); }
   function openTask(task?:StudyTask) { setEditingTask(task||null); if(task)setPlanningDate(task.date);openModal("task"); }
-  function openStudy(task?: StudyTask) { const subjectId=task?.subjectId || state.subjects[0]?.id || "", topics=state.subjects.find(s=>s.id===subjectId)?.topics||[], topic=task?.title || topics[0] || ""; setFocusRegistration(null); setSelectedSubject(subjectId); setSelectedTopic(topic); setStudyTopicChoice(topics.includes(topic)?`topic-${topics.indexOf(topic)}`:"custom"); setSelectedTask(task?.id || ""); setSelectedPlannerRef(task?.plannerRef); openModal("study"); }
+  function openStudy(task?: StudyTask) { setFocusRegistration(null); setSelectedSubject(task?.subjectId || state.subjects[0]?.id || ""); setSelectedTopic(task?.title || ""); setSelectedTask(task?.id || ""); setSelectedPlannerRef(task?.plannerRef); openModal("study"); }
   function startFocus(task?: StudyTask) {
     if (!state.subjects.length) { openModal("subject"); return; }
     if(task) setFocusRequest({id:uid(),subjectId:task.subjectId,topic:task.title,taskId:task.id,...(task.plannerRef?{plannerRef:task.plannerRef}:{})});
     navigate("focus");
   }
-  function registerFocus(value:FocusRegistration) { const topics=state.subjects.find(s=>s.id===value.subjectId)?.topics||[];setFocusRegistration(value);setSelectedSubject(value.subjectId);setSelectedTopic(value.topic);setStudyTopicChoice(topics.includes(value.topic)?`topic-${topics.indexOf(value.topic)}`:"custom");setSelectedTask(value.taskId||"");setSelectedPlannerRef(value.plannerRef);openModal("study"); }
+  function registerFocus(value:FocusRegistration) { setFocusRegistration(value);setSelectedSubject(value.subjectId);setSelectedTopic(value.topic);setSelectedTask(value.taskId||"");setSelectedPlannerRef(value.plannerRef);openModal("study"); }
   function submitStudy(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const f = new FormData(e.currentTarget);
     const minutes = Number(f.get("minutes")), questions = Number(f.get("questions")), correct = Number(f.get("correct"));
@@ -330,11 +332,10 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
         </>}
 
         {page === "syllabus" && <>
-          {heading("O MAPA DA SUA APROVAÇÃO", "Um tópico de cada vez.", "Base para concursos judiciários. Personalize conforme seu cargo e edital.", <button className="primary-button" onClick={() => openModal("subject")}><Plus size={17} />Adicionar disciplina</button>)}
-          <div className="inline-info"><ShieldCheck size={18} /><p>Esta é uma <strong>trilha geral de estudos</strong>. O conteúdo exigido depende do edital, do tribunal e da especialidade. Adicione os tópicos do seu documento oficial.</p></div>
-          <div className="filter-bar">{search("Buscar disciplina ou tópico…")}<span className="chip">{stats.completedTopics} / {stats.totalTopics} tópicos</span></div>
-          <div className="page-grid subjects-grid">{state.subjects.filter(s => `${s.name} ${s.topics.join(" ")}`.toLowerCase().includes(query.toLowerCase())).map(s => { const count = s.topics.filter((_, i) => state.completedTopics.includes(topicKey(s.id, i))).length; return <section className="subject-card" key={s.id}><div className="card-heading">{subjectIcon(s)}<div className="subject-heading"><h2>{s.name}</h2><span>{count} de {s.topics.length} tópicos</span></div><strong className="subject-percent">{Math.round(count / s.topics.length * 100)}%</strong></div>{progress(count / s.topics.length * 100, s.color)}<div className="topic-list">{s.topics.map((t, i) => <label className="topic-row" key={i}><input type="checkbox" checked={state.completedTopics.includes(topicKey(s.id, i))} onChange={() => mutate(prev => ({ ...prev, completedTopics: prev.completedTopics.includes(topicKey(s.id, i)) ? prev.completedTopics.filter(k => k !== topicKey(s.id, i)) : [...prev.completedTopics, topicKey(s.id, i)] }))} /><span>{t}</span></label>)}</div>{safeUrl(s.source) && <a className="section-link subject-source" href={safeUrl(s.source)} target="_blank" rel="noreferrer">Consultar edital oficial <ExternalLink size={13} /></a>}</section>; })}</div>
+          {heading("O MAPA DA SUA APROVAÇÃO", "Edital verticalizado TJSP", "Seu estudo, suas revisões e seus resultados em um só lugar.", <button className="primary-button" onClick={() => openModal("subject")}><Plus size={17} />Adicionar disciplina</button>)}
+          <SyllabusPanel state={state} onChange={mutate}/>
         </>}
+        {page === "questions" && <QuestionsPanel state={state} onChange={mutate} notify={notify}/>}
 
         {page === "reviews" && <ReviewsPanel state={state} onChange={mutate} notify={notify}/>}
 
@@ -381,7 +382,7 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
 
     {modal && <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setModal(null); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><div><span className="eyebrow">SUA JORNADA, UM PASSO DE CADA VEZ</span><h2 id="modal-title">{{ study: "Mais um estudo para a conta.", task: "Qual é a sua próxima missão?", subject: "Seu edital, bem organizado.", note: editingNote ? "Dê mais um toque à sua anotação." : "Guarde uma boa ideia.", error: "Transforme esse erro em aprendizado.", goal: "Para onde você quer ir?", notifications: "Um lembrete com carinho." }[modal]}</h2></div><button className="icon-button" aria-label="Fechar janela" onClick={() => setModal(null)}><X size={20} /></button></div>
       {formError && modal !== "study" && modal !== "subject" && <p className="error-text modal-validation" role="alert">{formError}</p>}
-      {modal === "study" && <form onSubmit={submitStudy}><div className="modal-body"><label className="form-field">Disciplina<select className="form-select" name="subjectId" value={selectedSubject} required onChange={e=>{const subjectId=e.target.value,topics=state.subjects.find(s=>s.id===subjectId)?.topics||[];setSelectedSubject(subjectId);setSelectedTopic(topics[0]||"");setStudyTopicChoice(topics.length?"topic-0":"custom");}}>{state.subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label className="form-field">Conteúdo do edital<select className="form-select" name="topicChoice" value={studyTopicChoice} required onChange={e=>{setStudyTopicChoice(e.target.value);setSelectedTopic(e.target.value.startsWith("topic-")?subject(selectedSubject)?.topics[Number(e.target.value.slice(6))]||"":"");}}><option value="" disabled>Selecione um conteúdo</option>{(subject(selectedSubject)?.topics||[]).map((topic,index)=><option key={`${index}-${topic}`} value={`topic-${index}`}>{topic}</option>)}<option value="custom">Outro conteúdo…</option></select></label>{studyTopicChoice==="custom"?<label className="form-field">Descreva o conteúdo estudado<input className="form-input" name="topic" value={selectedTopic} onChange={e=>setSelectedTopic(e.target.value)} placeholder="Ex.: Tópico complementar" required maxLength={200} /></label>:<input type="hidden" name="topic" value={selectedTopic} />}<div className="form-grid"><label className="form-field">Tempo de estudo (min)<input className="form-input" type="number" name="minutes" defaultValue={focusRegistration?.minutes || 30} readOnly={!!focusRegistration} min={1} max={720} required /></label><label className="form-field">Questões resolvidas<input className="form-input" type="number" name="questions" defaultValue={0} min={0} max={1000} required /></label><label className="form-field">Acertos<input className="form-input" type="number" name="correct" defaultValue={0} min={0} max={1000} required /></label></div><div className="inline-info"><RefreshCw size={17} /><p>A revisão seguirá a próxima semana cumulativa, agrupada ou final que inclui este conteúdo no seu ciclo.</p></div>{formError && <p className="error-text" role="alert">{formError}</p>}</div><div className="modal-footer"><button type="button" className="ghost-button" onClick={() => setModal(null)}>Voltar</button><button className="primary-button" type="submit">Registrar e evoluir <Sparkles size={16} /></button></div></form>}
+      {modal === "study" && <form onSubmit={submitStudy}><div className="modal-body"><label className="form-field">Disciplina{subjectSelect(selectedSubject)}</label><label className="form-field">O que você estudou?<input className="form-input" name="topic" defaultValue={selectedTopic} placeholder="Ex.: Direitos e garantias fundamentais" required maxLength={200} /></label><div className="form-grid"><label className="form-field">Tempo de estudo (min)<input className="form-input" type="number" name="minutes" defaultValue={focusRegistration?.minutes || 30} readOnly={!!focusRegistration} min={1} max={720} required /></label><label className="form-field">Questões resolvidas<input className="form-input" type="number" name="questions" defaultValue={0} min={0} max={1000} required /></label><label className="form-field">Acertos<input className="form-input" type="number" name="correct" defaultValue={0} min={0} max={1000} required /></label></div><div className="inline-info"><RefreshCw size={17} /><p>A revisão seguirá a próxima semana cumulativa, agrupada ou final que inclui este conteúdo no seu ciclo.</p></div>{formError && <p className="error-text" role="alert">{formError}</p>}</div><div className="modal-footer"><button type="button" className="ghost-button" onClick={() => setModal(null)}>Voltar</button><button className="primary-button" type="submit">Registrar e evoluir <Sparkles size={16} /></button></div></form>}
       {modal === "task" && <form onSubmit={submitTask}><div className="modal-body"><label className="form-field">Disciplina{subjectSelect(editingTask?.subjectId)}</label><label className="form-field">Sua missão<input className="form-input" name="title" defaultValue={editingTask?.title} placeholder="Ex.: Revisar atos administrativos" maxLength={200} required /></label><div className="form-grid two-columns"><label className="form-field">Quando?<input className="form-input" type="date" name="date" defaultValue={planningDate} required /></label><label className="form-field">Tempo reservado (min)<input className="form-input" type="number" name="minutes" min={5} max={480} step={5} defaultValue={editingTask?.minutes||30} required /></label></div></div><div className="modal-footer"><button type="button" className="ghost-button" onClick={() => setModal(null)}>Voltar</button><button className="primary-button" type="submit">Salvar missão <Check size={16} /></button></div></form>}
       {modal === "subject" && <form onSubmit={submitSubject}><div className="modal-body"><label className="form-field">Nome da disciplina<input className="form-input" name="name" placeholder="Ex.: Direito Eleitoral" required maxLength={120} /></label><label className="form-field">Tópicos do edital<textarea className="form-textarea" name="topics" rows={7} maxLength={15000} required placeholder={"Cole o conteúdo programático, com um tópico por linha.\nEx.:\nDireitos políticos\nAlistamento eleitoral\nPartidos políticos"} /></label><label className="form-field">Link do edital oficial (opcional)<input className="form-input" type="url" name="source" placeholder="https://www.tribunal.jus.br/…" maxLength={1500} /></label><p className="field-hint">Cada linha vira um tópico que você pode marcar ao concluir. Você também pode colar o texto de um PDF.</p>{formError && <p className="error-text" role="alert">{formError}</p>}</div><div className="modal-footer"><button type="button" className="ghost-button" onClick={() => setModal(null)}>Voltar</button><button className="primary-button" type="submit">Adicionar ao meu edital <Check size={16} /></button></div></form>}
       {modal === "note" && <form onSubmit={submitNote}><div className="modal-body"><label className="form-field">Disciplina{subjectSelect(editingNote?.subjectId)}</label><label className="form-field">Título<input className="form-input" name="title" defaultValue={editingNote?.title} placeholder="Uma ideia para lembrar" required maxLength={200} /></label><label className="form-field">Sua anotação<textarea className="form-textarea" name="content" defaultValue={editingNote?.content} rows={8} placeholder="Escreva com suas palavras. O aprendizado é seu." required maxLength={15000} /></label></div><div className="modal-footer"><button type="button" className="ghost-button" onClick={() => setModal(null)}>Voltar</button><button className="primary-button" type="submit">Guardar anotação <Bookmark size={16} /></button></div></form>}

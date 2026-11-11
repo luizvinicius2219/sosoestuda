@@ -24,6 +24,16 @@ A instalação pessoal usa PostgreSQL pelo Marketplace da Vercel e conta privada
 
 ## Desenvolvimento
 
+### Caderno de questões e edital TJSP
+
+O **Caderno de questões** registra questões individuais e lotes com data, origem, disciplina, assunto, acertos, confiança, chutes, motivo do erro e explicação. Permite edição, exclusão, filtros, revisão e importação/exportação de JSON no formato `soso-questions-v1`. Reimportar uma fonte preserva os registros já existentes e suas edições. Os dados ficam no estado privado da conta; a planilha original não é publicada.
+
+O **Meu edital** inclui os 104 tópicos das 11 disciplinas da referência Notion consultada em 10/11/2026, sem remover tópicos ou estudos anteriores. Cada assunto possui status, estudo reverso, teoria ou leitura da lei/aula e três revisões. O percentual usa a soma de acertos dividida pela soma de questões válidas vinculadas ao tópico: ruim abaixo de 60%, regular entre 60% e 85% inclusive, bom acima de 85%. Sem questões, não há classificação. Os percentuais mudam ao registrar, editar ou excluir resultados; não há sincronização contínua com o Notion.
+
+No caderno, o desempenho aparente é `acertos / questões`; o real segue a planilha, `max(0, acertos - chutes) / questões`. Anuladas não entram no cálculo. Registros de estudo e caderno são fontes distintas: registre a mesma tentativa em apenas uma delas para evitar contagem dupla. Assuntos amplos podem permanecer sem vínculo até a estudante escolher o tópico correspondente.
+
+Para uma importação privada administrada: `node --experimental-strip-types --env-file=.env.local scripts/import-notebook.mjs caminho/privado.json`. A importação exige `DATABASE_URL` e `SOFIA_EMAIL`, valida o estado completo e usa controle de versão. Como alternativa de preparo único na Vercel, `NOTEBOOK_IMPORT_JSON` pode ser configurado como segredo de produção para execução no prebuild. Faça isso apenas depois que a versão que suporta o novo esquema estiver publicada; remova o segredo após verificar a importação. Não inclua conteúdo privado no Git.
+
 Node.js >=22.13.
 
 ```sh
