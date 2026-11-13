@@ -12,6 +12,7 @@ import AchievementsPanel from "./achievements-panel";
 import QuestionsPanel from "./questions-panel";
 import SyllabusPanel from "./syllabus-panel";
 import { levelTitle } from "@/lib/achievements";
+import { dailyMotivation } from "@/lib/motivation";
 import type { PlannerRef } from "@/lib/planner-schema";
 import { addDays, calculateStats, completeStudy, createInitialState, reconcileStudyState, studyStateSchema, todayKey, type StudyState, type StudyTask, type Subject, type StudyNote, type StudyError } from "@/lib/study";
 
@@ -97,6 +98,7 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
   const doneTasks = todaysTasks.filter(t => t.done).length;
   const todayMinutes = state.sessions.filter(s => s.date === today).reduce((n, s) => n + s.minutes, 0);
   const dailyPct = Math.min(100, Math.round(todayMinutes / state.profile.dailyMinutes * 100));
+  const motivation = dailyMotivation(today);
   const weeklyPct = Math.min(100, Math.round(stats.weekMinutes / state.profile.weeklyMinutes * 100));
   const examDays = state.profile.examDate ? Math.round((Date.parse(`${state.profile.examDate}T12:00:00-03:00`) - Date.parse(`${today}T12:00:00-03:00`)) / 86400000) : null;
   const firstName = (state.profile.name || initialUser?.name || "Soso").split(" ")[0];
@@ -336,6 +338,7 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
         {celebration&&<div className="level-celebration" role="status"><SofiaCharacter pose="celebrate" className="celebration-character"/><strong>{celebration}</strong><button className="icon-button" aria-label="Fechar conquista" onClick={()=>setCelebration("")}><X size={17}/></button></div>}
         {page === "lia" && <LiaPanel key={liaPrompt?.id||"lia"} messages={state.assistantMessages||[]} configured={assistantConfigured} busy={asking} initialPrompt={liaPrompt} onSend={askAssistant}/> }
         {page === "home" && <>
+          <div className="inline-info daily-motivation" role="status"><Sparkles size={17} /><p><strong>Frase de hoje:</strong> {motivation}</p></div>
           {heading(new Date(`${today}T12:00:00-03:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }), <>Um passo mais perto, <span className="title-name">{firstName}.</span> <span className="heading-spark">✦</span></>, "Seu futuro está sendo construído. Vamos cuidar do próximo passo?", <button className="secondary-button" onClick={() => openStudy()}><Plus size={17} />Registrar estudo</button>)}
           <PlannerOverview state={state} onOpen={() => navigate("cycles")} />
           <div className="summary-grid">
