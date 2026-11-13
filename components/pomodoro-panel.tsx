@@ -58,6 +58,19 @@ export default function PomodoroPanel({subjects,storageKey,expanded,request,rece
     if(!settingsRef.current.sound)return;
     try{audioRef.current??=new AudioContext();void audioRef.current.resume().catch(()=>setSoundAvailable(false));}catch{setSoundAvailable(false);}
   }
+  function playSound(kind:"start"|"pause-start"|"focus-done"|"break-done"|"registered"){
+    if(!settingsRef.current.sound)return;
+    try{
+      unlockAudio();
+      const audio=audioRef.current;if(!audio)return;
+      const patterns:Record<typeof kind,number[]>={start:[523,659],"pause-start":[392,523],"focus-done":[659,784,988],"break-done":[523,659],registered:[784,988,1175]};
+      patterns[kind].forEach((frequency,index)=>{
+        const oscillator=audio.createOscillator(),gain=audio.createGain(),at=audio.currentTime+index*.13;
+        oscillator.type="sine";oscillator.frequency.value=frequency;oscillator.connect(gain);gain.connect(audio.destination);
+        gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(.1,at+.02);gain.gain.exponentialRampToValueAtTime(.0001,at+.18);oscillator.start(at);oscillator.stop(at+.2);
+      });
+    }catch{setSoundAvailable(false);}
+  }
   useEffect(()=>{
     if(!ready || !request || request.id===handledRequest.current)return;
     handledRequest.current=request.id;
@@ -69,6 +82,7 @@ export default function PomodoroPanel({subjects,storageKey,expanded,request,rece
 
   useEffect(()=>{
     if(!receipt || receipt!==pendingReceipt.current)return;
+    playSound("registered");
     pendingReceipt.current="";setTimer(newTimer(settingsRef.current));setNotice("Estudo registrado. Pronta para o próximo bloco!");
   },[receipt]);
 
@@ -80,10 +94,7 @@ export default function PomodoroPanel({subjects,storageKey,expanded,request,rece
       if(!result.finished)return;
       const message=result.finished==="focus"?"Foco concluído! Hora de respirar. Seu tempo está pronto para registrar.":"Pausa concluída. Vamos para o próximo bloco de foco?";
       setNotice(message);notify(message);
-      if(settingsRef.current.sound && audioRef.current){try{
-        const audio=audioRef.current,oscillator=audio.createOscillator(),gain=audio.createGain();oscillator.connect(gain);gain.connect(audio.destination);oscillator.frequency.value=740;
-        gain.gain.setValueAtTime(.12,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.7);oscillator.start();oscillator.stop(audio.currentTime+.7);
-      }catch{setSoundAvailable(false);}}
+      playSound(result.finished==="focus"?"focus-done":"break-done");
       if(settingsRef.current.notifications && "Notification" in window && Notification.permission==="granted")try{new Notification("SosoEstuda · Pomodoro",{body:message,icon:"/favicon.svg"});}catch{/* The visible alert still works. */}
     };
     const interval=setInterval(tick,500);document.addEventListener("visibilitychange",tick);
@@ -116,7 +127,7 @@ export default function PomodoroPanel({subjects,storageKey,expanded,request,rece
     <div className="pomodoro-main"><div className="pomodoro-heading"><span className="eyebrow">SUA MISSÃO AGORA</span><button className="icon-button" aria-label="Opções do Pomodoro" aria-expanded={options} onClick={()=>setOptions(!options)}><Settings2 size={20}/></button></div>
       <div className="pomodoro-tabs" role="group" aria-label="Etapa do timer">{(Object.keys(phaseLabels) as Phase[]).map(phase=><button key={phase} aria-pressed={timer.phase===phase} className={timer.phase===phase?"active":""} onClick={()=>{if(timer.running&&!window.confirm("Interromper a etapa atual e trocar?"))return;setTimer(changePhase(timerRef.current,phase,settings));}}>{phaseLabels[phase]}</button>)}</div>
       <div className="pomodoro-clock" style={{"--timer-progress":`${progress}%`} as React.CSSProperties}><div><span>{timer.phase==="focus"?<Timer size={21}/>:<Coffee size={21}/>} {phaseLabels[timer.phase]}</span><strong role="timer" aria-label={`${phaseLabels[timer.phase]}: ${clock}`}>{clock}</strong><small>Bloco {timer.round%settings.rounds+1} de {settings.rounds}</small></div></div>
-      <div className="pomodoro-controls"><button className="icon-button" title="Reiniciar etapa" aria-label="Reiniciar etapa" onClick={()=>{if(window.confirm("Reiniciar esta etapa? O tempo de foco já estudado será preservado para registro."))setTimer(changePhase(timerRef.current,timer.phase,settings));}}><RotateCcw size={21}/></button><button className="primary-button pomodoro-start" disabled={!ready} onClick={()=>{unlockAudio();setTimer(setRunning(timerRef.current,!timer.running));}}>{timer.running?<Pause size={22}/>:<Play size={22} fill="currentColor"/>}{timer.running?"Pausar":"Começar"}</button><button className="icon-button" title="Pular etapa" aria-label="Pular etapa" onClick={()=>{const next=timer.phase==="focus"?(timer.round%settings.rounds===settings.rounds-1?"long":"short"):"focus";setTimer(changePhase(timerRef.current,next,settings));setNotice("Etapa pulada. Somente blocos de foco completos contam para conquistas.");}}><SkipForward size={22}/></button></div>
+      <div className="pomodoro-controls"><button className="icon-button" title="Reiniciar etapa" aria-label="Reiniciar etapa" onClick={()=>{if(window.confirm("Reiniciar esta etapa? O tempo de foco já estudado será preservado para registro."))setTimer(changePhase(timerRef.current,timer.phase,settings));}}><RotateCcw size={21}/></button><button className="primary-button pomodoro-start" disabled={!ready} onClick={()=>{unlockAudio();if(!timerRef.current.running)playSound(timerRef.current.phase==="focus"?"start":"pause-start");setTimer(setRunning(timerRef.current,!timerRef.current.running));}}>{timer.running?<Pause size={22}/>:<Play size={22} fill="currentColor"/>}{timer.running?"Pausar":"Começar"}</button><button className="icon-button" title="Pular etapa" aria-label="Pular etapa" onClick={()=>{const next=timer.phase==="focus"?(timer.round%settings.rounds===settings.rounds-1?"long":"short"):"focus";setTimer(changePhase(timerRef.current,next,settings));setNotice("Etapa pulada. Somente blocos de foco completos contam para conquistas.");}}><SkipForward size={22}/></button></div>
       <p className="pomodoro-notice" role="status">{notice||"Um bloco de cada vez. As pausas também fazem parte do caminho."}</p>
     </div>
     <div className="pomodoro-side"><h2>Prepare seu foco</h2><label className="form-field">Disciplina<select className="form-select" value={context.subjectId} disabled={timer.running} onChange={e=>setContext({subjectId:e.target.value,topic:context.topic})}>{subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label className="form-field">O que você vai estudar?<input className="form-input" value={context.topic} maxLength={200} disabled={timer.running} onChange={e=>setContext({...context,topic:e.target.value||"Sessão livre de estudo"})}/></label>
