@@ -47,6 +47,7 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
   const [loading, setLoading] = useState(!!initialUser);
   const [loadError, setLoadError] = useState("");
   const [sync, setSync] = useState("saved");
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [dirty, setDirty] = useState(0);
   const [retry, setRetry] = useState(0);
   const version = useRef(0);
@@ -83,6 +84,12 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
   const [loadedLocal, setLoadedLocal] = useState(false);
   const [recoverableDraft, setRecoverableDraft] = useState<StudyState | null>(null);
   const [today, setToday] = useState(todayKey);
+  const latestState = useRef(state);
+  const latestVersion = useRef(version.current);
+  const latestDirty = useRef(dirty);
+  latestState.current = state;
+  latestVersion.current = version.current;
+  latestDirty.current = dirty;
   const stats = useMemo(() => calculateStats(state, today), [state, today]);
   const achievementDefs = stats.achievements;
   const due = state.reviews.filter(r => !r.completed && r.dueDate <= today);
@@ -128,6 +135,14 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
   }, [initialUser]);
 
   useEffect(() => {
+    const wentOnline = () => { setOnline(true); setRetry(value => value + 1); };
+    const wentOffline = () => { setOnline(false); if (initialUser) setSync("offline"); };
+    window.addEventListener("online", wentOnline);
+    window.addEventListener("offline", wentOffline);
+    return () => { window.removeEventListener("online", wentOnline); window.removeEventListener("offline", wentOffline); };
+  }, [initialUser]);
+
+  useEffect(() => {
     if (!dirty || loading || loadError || asking) return;
     if (!initialUser) {
       if (loadedLocal) try { localStorage.setItem("sosoestuda-demo-v1", JSON.stringify(state)); } catch {
@@ -139,7 +154,7 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
     const snapshot = state;
     const snapshotRevision = dirty;
     try { localStorage.setItem(`sosoestuda-draft:${initialUser.email}`, JSON.stringify(snapshot)); } catch { /* Cloud sync remains available. */ }
-    if (conflict.current) return;
+    if (conflict.current || !online) { if (!online) setSync("offline"); return; }
     setSync("saving");
     const timeout = setTimeout(() => {
       queue.current = queue.current.catch(() => {}).then(async () => {
@@ -153,11 +168,24 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
             setSync("saved");
             try { localStorage.removeItem(`sosoestuda-draft:${initialUser.email}`); } catch { /* Cloud save succeeded even if browser storage is blocked. */ }
           }
-        } catch { setSync("error"); }
+        } catch { setSync(navigator.onLine ? "error" : "offline"); }
       });
     }, 700);
     return () => clearTimeout(timeout);
-  }, [state, dirty, retry, initialUser, loading, loadError, loadedLocal, asking]);
+  }, [state, dirty, retry, initialUser, loading, loadError, loadedLocal, asking, online]);
+
+  useEffect(() => {
+    if (!initialUser) return;
+    const saveBeforeLeaving = () => {
+      const pending = latestDirty.current > 0 && !conflict.current;
+      if (!pending) return;
+      try { localStorage.setItem(`sosoestuda-draft:${initialUser.email}`, JSON.stringify(latestState.current)); } catch { /* The in-memory state is still available while the page remains open. */ }
+      if (!navigator.onLine) return;
+      void fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: latestState.current, version: latestVersion.current }), keepalive: true }).catch(() => {});
+    };
+    window.addEventListener("pagehide", saveBeforeLeaving);
+    return () => window.removeEventListener("pagehide", saveBeforeLeaving);
+  }, [initialUser]);
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 4200); return () => clearTimeout(t); }, [toast]);
   useEffect(() => {
@@ -246,7 +274,9 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
     setModal(null); notify("Erro registrado e revisão agendada. Errar também é aprender.");
   }
   function downloadData() {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
+    let pomodoro: unknown = undefined;
+    try { pomodoro = JSON.parse(localStorage.getItem(`sosoestuda-pomodoro-v1:${initialUser?.email || "demo"}`) || "null"); } catch { /* Export the study state even if the timer copy is unreadable. */ }
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ ...state, ...(pomodoro ? { pomodoro } : {}) }, null, 2)], { type: "application/json" }));
     const a = document.createElement("a"); a.href = url; a.download = `sosoestuda-${today}.json`; a.click(); URL.revokeObjectURL(url); notify("Seus estudos foram exportados.");
   }
   function openLia(prompt?:string) { if(prompt||page!=="lia")setLiaPrompt({id:uid(),text:(prompt||"").slice(0,3000)});navigate("lia"); }
@@ -297,9 +327,9 @@ export default function StudyApp({ initialUser }: { initialUser: User | null }) 
       <header inert={asking} className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}><Menu size={22} /></button><BookOpen size={15} /><span>Minha jornada</span><ChevronRight size={14} /><strong>{pages.find(p => p.id === page)?.label || "Preferências"}</strong></div><div className="topbar-actions">{examDays !== null && examDays >= 0 && <button className="exam-countdown" onClick={() => openModal("goal")}><Target size={14} />{examDays === 0 ? "Sua prova é hoje!" : `${examDays} dias para a prova`}</button>}<span className="topbar-streak"><Flame size={17} />{stats.streak} {stats.streak === 1 ? "dia" : "dias"}</span><button className="icon-button" aria-label="Central de lembretes" onClick={() => openModal("notifications")}><Bell size={19} />{due.length > 0 && <span className="notification-dot" />}</button><span className="topbar-divider" />{initialUser ? <button className="user-button" onClick={() => navigate("settings")}><span className="avatar small-avatar">{firstName.slice(0, 1).toUpperCase()}</span><span>{firstName}</span><ChevronDown size={14} /></button> : <a className="secondary-button small-button" href="/login" target="_top">Entrar <ArrowRight size={14} /></a>}</div></header>
       <main className="content" id="main-content" inert={asking && page!=="lia"}>
         {!initialUser && <div className="demo-banner"><Sparkles size={15} /><span>Conheça sua próxima rotina de estudos. <strong>Você está no modo de demonstração.</strong></span><a href="/login" target="_top">Criar minha jornada <ArrowRight size={14} /></a></div>}
-        {recoverableDraft && <div className="inline-alert"><span>Encontramos alterações deste navegador que ainda não estão na sua conta. Você pode recuperá-las antes de continuar.</span><button className="secondary-button" onClick={() => { mutate(() => recoverableDraft); setRecoverableDraft(null); notify("Rascunho recuperado. Salvando na sua conta…"); }}>Recuperar alterações</button><button className="ghost-button" onClick={() => { setRecoverableDraft(null); if (initialUser) try { localStorage.removeItem(`sosoestuda-draft:${initialUser.email}`); } catch { /* Storage may be unavailable. */ } }}>Usar versão da conta</button></div>}
+        {recoverableDraft && <div className="inline-alert"><span>Encontramos alterações deste navegador que ainda não estão na sua conta. Os registros de estudo serão combinados com a versão da conta, sem apagar horas mais novas.</span><button className="secondary-button" onClick={() => { const draft = recoverableDraft; mutate(current => ({ ...current, sessions: [...current.sessions, ...draft.sessions.filter(session => !current.sessions.some(existing => existing.id === session.id))], questionRecords: [...(current.questionRecords || []), ...(draft.questionRecords || []).filter(record => !(current.questionRecords || []).some(existing => existing.id === record.id))] })); setRecoverableDraft(null); notify("Registros recuperados. Salvando na sua conta…"); }}>Recuperar registros</button><button className="ghost-button" onClick={() => { setRecoverableDraft(null); if (initialUser) try { localStorage.removeItem(`sosoestuda-draft:${initialUser.email}`); } catch { /* Storage may be unavailable. */ } }}>Usar versão da conta</button></div>}
         {loadError && <div className="inline-alert">{loadError}<button className="secondary-button" onClick={() => location.reload()}>Tentar novamente</button></div>}
-        {(sync === "error" || sync === "conflict") && <div className="inline-alert">{sync === "conflict" ? "Seus estudos foram alterados em outra aba. Exporte suas alterações antes de recarregar." : "Não conseguimos salvar agora. Mantenha esta página aberta e tente novamente."}<button className="ghost-button" onClick={downloadData}>Exportar cópia</button>{sync === "error" && <button className="secondary-button" onClick={() => setRetry(r => r + 1)}>Tentar salvar</button>}</div>}
+        {(sync === "error" || sync === "conflict" || sync === "offline") && <div className="inline-alert">{sync === "conflict" ? "Seus estudos foram alterados em outra aba. Exporte suas alterações antes de recarregar." : sync === "offline" ? "Sem internet: seus registros estão guardados neste dispositivo e serão enviados quando a conexão voltar." : "Não conseguimos salvar agora. Seus registros continuam guardados neste dispositivo."}<button className="ghost-button" onClick={downloadData}>Exportar cópia</button>{sync !== "conflict" && <button className="secondary-button" onClick={() => setRetry(r => r + 1)}>Tentar salvar</button>}</div>}
         {loading ? <div className="loading-state"><RefreshCw size={28} /><p>Abrindo seu espaço de estudos…</p></div> : loadError ? null : <>
         {page === "focus" && heading("FOCO COM RITMO E LEVEZA", "Seu próximo bloco começa aqui.", "Escolha seu ritmo, cuide das pausas e transforme dedicação em experiência.")}
         <div inert={asking}><PomodoroPanel subjects={state.subjects} storageKey={`sosoestuda-pomodoro-v1:${initialUser?.email||"demo"}`} expanded={page==="focus"} request={focusRequest} receipt={timerReceipt} onOpen={()=>navigate("focus")} onRegister={registerFocus} notify={notify}/></div>
